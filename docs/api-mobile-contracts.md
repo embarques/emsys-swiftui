@@ -296,20 +296,32 @@ cover downloaded records only, not all server appointments. There is no pickup
 incremental-deletion feed, so cached membership can be stale while disconnected;
 a detail 403/404 removes that cached record, and a list 401/403 clears the cache.
 
-PUT `/pickups/:id` accepts a supplied-field patch. Omitted fields are preserved
-by `preparePickupUpdate`; `{"completed":true}` avoids replaying a lossy read
-projection over customer, route or comment snapshots. The web completion action
-also fetches the record afterward to check the result. Native completion requires
-a connection, first reads the current record, patches only completed, saves the
-server receipt and verifies with another GET. A failed/unknown PUT outcome is not
-automatically retried; explicit refresh resolves the state before another action.
-The application does not create invoices, settle payments or assign routes when
-marking a pickup complete.
+Offline completion now uses the companion pickup sync contract (backend rollout
+required): POST `/pickups/sync/search` downloads a bounded scoped page of
+`{pickup, revision}` snapshots; GET `/pickups/sync/:id` refreshes one snapshot.
+POST `/pickups/sync/:id/complete` accepts immutable `{requestId, revision}` and
+returns `{pickup, revision, requestId}` after server confirmation. Ordinary
+GET/search remain read-only compatibility fallbacks and cannot prepare completion.
+No ordinary PUT is used as an unsafe sync fallback.
 
-Backend gaps: pickup writes have no transactional idempotency/sync endpoint or
-conditional version contract. Safe offline completion, creation and attachment/
-signature uploads therefore need backend contracts before enabling a pickup
-outbox; no unsupported endpoints or background upload promises were added.
+SQLite commits a frozen UUID/request to the pickup outbox before any upload;
+its operational projection immediately shows completion pending synchronization.
+Restarts and retries preserve identical request bytes. Downloads cannot overwrite
+pending intent. 409 requires explicit review/acceptance of the current server
+copy; unknown outcomes cannot be discarded. 401/403 and unavailable endpoint
+states retain work for explicit retry. Denied snapshots are hidden while active
+operations remain durable. Global synchronization attempts pickup and invoice
+queues independently and reports unresolved work.
+
+The API commits minimal completion status/audit fields and an idempotency receipt
+in one tenant transaction. It checks existing view/update grants and current
+assigned-route scope. Changed revisions conflict. Accepted receipt replays never
+re-complete a dispatcher-reopened record. Legacy-enabled companies remain pending
+until the explicit legacy completion operation confirms; missing legacy mappings
+require administrative repair. The endpoint never creates a legacy pickup.
+Pickup creation, photos/signature upload and incremental deletion retrieval still
+need separate contracts. Completion does not create an invoice or record payment.
+
 The pickup-to-invoice association is now implemented in the companion API branch
 `codex/pickup-invoice-association`: create/sync accept `pickup: {id: UInt32}` or a
 legacy string ID, resolve the server snapshot in the tenant transaction, and

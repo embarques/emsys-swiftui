@@ -6292,6 +6292,210 @@
           }
         }
       }
+    },
+    "pickupSync.pending": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Completada · Pendiente de sincronizar"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Completed · Pending sync"
+          }
+        }
+      }
+    },
+    "pickupSync.completed": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recogida sincronizada"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pickup synchronized"
+          }
+        }
+      }
+    },
+    "pickupSync.needsReview": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La recogida cambió. Revisa la versión del servidor."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The pickup changed. Review the server version."
+          }
+        }
+      }
+    },
+    "pickupSync.authorizationRequired": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se requieren permisos para sincronizar esta recogida."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Permission is required to synchronize this pickup."
+          }
+        }
+      }
+    },
+    "pickupSync.serverUnavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El servidor aún no admite la sincronización de recogidas."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The server does not yet support pickup synchronization."
+          }
+        }
+      }
+    },
+    "pickupSync.retryHint": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El cambio está guardado en este dispositivo. Si la sincronización falla, se conserva para reintentar."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The change is saved on this device and retained for retry if synchronization fails."
+          }
+        }
+      }
+    },
+    "pickupSync.downloadRequired": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conéctate y actualiza la recogida una vez para preparar su finalización sin conexión."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect and refresh the pickup once to prepare it for offline completion."
+          }
+        }
+      }
+    },
+    "pickupSync.offlineHint": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Puedes completar sin conexión. La confirmación del servidor llegará al sincronizar."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You can complete offline. Server confirmation arrives after synchronization."
+          }
+        }
+      }
+    },
+    "pickupSync.confirmHint": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se guardará la finalización en este dispositivo y se sincronizará cuando haya conexión."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Completion will be saved on this device and synchronized when connected."
+          }
+        }
+      }
+    },
+    "pickupSync.changedLocally": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los datos descargados cambiaron. Actualiza y revisa la recogida antes de completarla."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Downloaded data changed. Refresh and review the pickup before completing it."
+          }
+        }
+      }
+    },
+    "pickupSync.useServer": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usar versión del servidor"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use server version"
+          }
+        }
+      }
+    },
+    "pickupSync.discardPrompt": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Descartar la finalización rechazada y usar la recogida actual del servidor?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Discard rejected completion and use the current server pickup?"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

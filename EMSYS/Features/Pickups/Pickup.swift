@@ -52,7 +52,7 @@ nonisolated struct Pickup: Codable, Identifiable, Equatable, Sendable {
     let id: UInt32
     let date: String?
     let updatedAt: String?
-    let completed: Bool
+    var completed: Bool
     let completedAt: String?
     let completedBy: Reference?
     let route: Reference?
@@ -62,6 +62,8 @@ nonisolated struct Pickup: Codable, Identifiable, Equatable, Sendable {
     let receivers: [Party]?
     let purpose: String?
     let comments: [Comment]?
+
+    var pendingCompletion: Bool? = nil
 
     var isComplete: Bool { completed || completedAt != nil || completedBy != nil }
     var searchText: String {
