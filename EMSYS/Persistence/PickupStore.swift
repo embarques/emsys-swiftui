@@ -49,6 +49,14 @@ actor PickupStore {
                 table.column("state", .text).notNull()
             }
         }
+        migrator.registerMigration("cachePickupInvoiceContext") { database in
+            try database.create(table: "pickupInvoiceContexts") { table in
+                table.column("pickupID", .integer).notNull()
+                table.column("receiverID", .text).notNull()
+                table.column("payload", .blob).notNull()
+                table.primaryKey(["pickupID", "receiverID"])
+            }
+        }
         try migrator.migrate(database)
     }
 
@@ -191,6 +199,26 @@ actor PickupStore {
             guard try Bool.fetchOne(database, sql: "SELECT EXISTS(SELECT 1 FROM pickupCompletions WHERE pickupID = ? AND state = 'needsReview')", arguments: [id]) == true else { throw StoreError.pendingOperation }
             try Self.write(snapshot, in: database)
             try database.execute(sql: "DELETE FROM pickupCompletions WHERE pickupID = ? AND state = 'needsReview'", arguments: [id])
+        }
+    }
+
+    func saveInvoiceContext(_ context: PickupInvoiceContext, pickup: Pickup, receiverID: String?) throws {
+        guard context.matches(pickup, receiverID: receiverID) else { throw StoreError.invalidRecords }
+        let payload = try JSONEncoder().encode(context)
+        try database.write { database in
+            try database.execute(sql: "INSERT INTO pickupInvoiceContexts (pickupID, receiverID, payload) VALUES (?, ?, ?) ON CONFLICT(pickupID, receiverID) DO UPDATE SET payload = excluded.payload",
+                arguments: [pickup.id, context.receiver?.id ?? "", payload])
+        }
+    }
+
+    func invoiceContext(pickup: Pickup, receiverID: String?) throws -> PickupInvoiceContext? {
+        let choices = PickupInvoicePrefill.receivers(in: pickup)
+        let selected = receiverID ?? (choices.count == 1 ? choices.first?.id : nil) ?? ""
+        return try database.read { database in
+            guard let payload = try Data.fetchOne(database, sql: "SELECT payload FROM pickupInvoiceContexts WHERE pickupID = ? AND receiverID = ? AND EXISTS(SELECT 1 FROM pickupSnapshots WHERE id = ? AND hidden = 0)",
+                arguments: [pickup.id, selected, pickup.id]) else { return nil }
+            let context = try JSONDecoder().decode(PickupInvoiceContext.self, from: payload)
+            return context.matches(pickup, receiverID: receiverID) ? context : nil
         }
     }
 

@@ -336,3 +336,14 @@ pickup creation therefore uses `canCreateInvoice` with existing invoice view
 access. Portal assigned-only `canCreateAssignedInvoice` and context endpoints are
 not implemented in the checked-out API; native does not widen authorization to
 simulate that flow. Those driver-only writes remain a separate backend gap.
+
+## Scoped pickup invoice customer context
+
+Companion GET `/pickups/:id/invoice-context?receiverId=<ObjectID>` returns
+`{pickupId, revision, sender, receiver?}`. It reads at most the pickup's sender
+and chosen receiver in a tenant transaction and excludes unrelated customer
+metadata. The native app persists complete invoice fields under the original API
+names, selects the first address for both parties, and can reuse the downloaded
+context offline. Confirmed denial never falls back to a cached context. This is
+preparation only: assigned-only invoice writes and permission seeding remain
+separate work, and no general customer-list authority is granted.
