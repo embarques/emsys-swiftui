@@ -1,0 +1,12 @@
+# Firebase client configuration, including environment-specific variants.
+GoogleService-Info*.plist
+
+# Local Python verification artifacts.
+__pycache__/
+
+# Personal Xcode state and local build artifacts.
+xcuserdata/
+*.xcuserstate
+.DS_Store
+.build/
+DerivedData/
