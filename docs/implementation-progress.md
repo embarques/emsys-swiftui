@@ -1688,3 +1688,43 @@ Personal Xcode state is retained locally and removed from source control;
 Firebase configuration remains ignored. The original staged Xcode window-state
 blob was preserved at /private/tmp/emsys-xcode-userstate-staged.xcuserstate.
 No signing/bundle settings were changed for this publication.
+
+
+## Offline pickup completion — 2026-10-28
+
+Published existing Apple work through merged PR #1, then created a dedicated
+feature branch. Offline pickup completion adds scoped revision downloads,
+transactional SQLite outbox persistence, immutable retry identities, pending
+status presentation, conflict review and independent global upload attempts.
+Server changes live in a companion API PR: completion and its receipt commit
+atomically, enforce current assignment and preserve unknown fields. Legacy
+completion dependencies remain pending until confirmed without creating duplicate
+legacy records. API rollout is required before native offline completion is enabled.
+
+Regression coverage exercises restart recovery, duplicate requests, changed
+revisions, denied/reassigned records, receipt validation, reopened pickups,
+unknown network outcomes and explicit conflict recovery. A disposable loopback
+MongoDB replica set verifies transaction behavior and concurrent retries; no live
+company or account is used. Native synthetic rendering checks the pending state.
+Assigned-only invoice creation remains a separate unfinished capability. This
+increment does not add financial settlement, daily income or Cuadre operations.
+
+API validation passed: go vet ./..., go test ./..., generated Swagger/Scalar
+contract checks, and two consecutive disposable MongoDB transaction runs. Fixed
+fixture cleanup ordering so repeated runs remove their own records before
+closing the database connection. The task-owned MongoDB process was stopped.
+Companion API PR: https://github.com/embarques/emsys-api/pull/342 (open).
+
+Final Apple suites passed 175 macOS / 178 iPhone / 178 iPad tests. Inspected
+native synthetic iPhone/iPad rendering: pending completion is explicit, contact
+controls remain readable and iPad shows the retained-change hint and retry.
+Evidence: /private/tmp/emsys-offline-pickup-iphone.png and
+/private/tmp/emsys-offline-pickup-ipad.png. Live account/device synchronization,
+physical printing, Mac interaction, dark mode and large-text checks remain
+unverified. No bundle, signing, dependency or production data changes were made.
+
+Final serial ./scripts/verify.sh passed without intervention: normal-workspace
+package resolution, all suites above, physical-iPhone SDK compilation, Firebase
+identity validation, macOS Release, iOS Simulator Release and diff checks.
+Logs: emsys-verification.KnoG8d. Existing publication PR #1 is merged; this
+increment is submitted separately for review and requires the companion API rollout.

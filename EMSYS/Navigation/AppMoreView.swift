@@ -16,7 +16,7 @@ struct AppMoreView: View {
                     Label(AppDestination.settings.title, systemImage: AppDestination.settings.systemImageName)
                 }
             }
-            if session.canViewInvoices {
+            if session.canViewInvoices || session.canViewPickups {
                 Section("navigation.syncSection") {
                     Button { Task { await synchronize() } } label: {
                         HStack {

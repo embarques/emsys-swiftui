@@ -73,14 +73,25 @@ final class PickupListModel {
     }
 
     private func fetch(page: Int, token: UUID) async throws {
-        let records = try await client.post("pickups/search", body: query.request(page: page), queryItems: [
-            URLQueryItem(name: "completed", value: query.status == .completed ? "true" : "false"),
-            URLQueryItem(name: "sort", value: "date:desc,id:desc")
-        ], as: [Pickup].self)
-        try Task.checkCancellation()
-        guard generation == token, isAuthorized() else { return }
-        guard records.count <= PickupListQuery.batchSize else { throw APIClientError.invalidResponse }
-        try await store.save(records)
+        let queryItems = [URLQueryItem(name: "completed", value: query.status == .completed ? "true" : "false"),
+                          URLQueryItem(name: "sort", value: "date:desc,id:desc")]
+        let records: [Pickup]
+        do {
+            let snapshots = try await client.post("pickups/sync/search", body: query.request(page: page),
+                queryItems: queryItems, as: [PickupSyncSnapshot].self)
+            guard snapshots.count <= PickupListQuery.batchSize else { throw APIClientError.invalidResponse }
+            try Task.checkCancellation()
+            guard generation == token, isAuthorized() else { return }
+            try await store.save(snapshots)
+            records = snapshots.map(\.pickup)
+        } catch APIClientError.httpStatus(let status) where status == 404 || status == 405 {
+            let legacy = try await client.post("pickups/search", body: query.request(page: page), queryItems: queryItems, as: [Pickup].self)
+            guard legacy.count <= PickupListQuery.batchSize else { throw APIClientError.invalidResponse }
+            try Task.checkCancellation()
+            guard generation == token, isAuthorized() else { return }
+            try await store.save(legacy)
+            records = legacy
+        }
         guard generation == token, isAuthorized(), !Task.isCancelled else { return }
         // Publish the persisted values rather than a separate transient source.
         var saved: [Pickup] = []
@@ -88,9 +99,12 @@ final class PickupListModel {
             if let value = try await store.pickup(id: record.id) { saved.append(value) }
         }
         guard generation == token, isAuthorized(), !Task.isCancelled else { return }
-        if page == 1 { pickups = [] }
+        if page == 1 {
+            pickups = try await store.pickups(matching: query).filter { $0.pendingCompletion == true }
+            guard generation == token, isAuthorized() else { return }
+        }
         var ids = Set(pickups.map(\.id))
-        pickups.append(contentsOf: saved.filter { ids.insert($0.id).inserted })
+        pickups.append(contentsOf: saved.filter { query.matches($0) && ids.insert($0.id).inserted })
         self.page = page
         hasMore = records.count == PickupListQuery.batchSize
         isShowingDownloaded = false

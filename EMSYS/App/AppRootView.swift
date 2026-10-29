@@ -36,7 +36,7 @@ struct AppRootView: View {
             Task { await synchronize(includesDownloads: false) }
         }
         .task(id: automaticSyncTrigger) {
-            guard connection.status == .available, session.canViewInvoices,
+            guard connection.status == .available, (session.canViewInvoices || session.canViewPickups),
                   scenePhase == .active else { return }
             await synchronize()
         }
@@ -51,13 +51,13 @@ struct AppRootView: View {
 
     private var automaticSyncTrigger: AutomaticSyncTrigger {
         AutomaticSyncTrigger(
-            sessionID: session.contextID, isAuthorized: session.canViewInvoices,
+            sessionID: session.contextID, isAuthorized: session.canViewInvoices || session.canViewPickups,
             connection: connection.status, isActive: scenePhase == .active
         )
     }
 
     private func synchronize(includesDownloads: Bool = true) async {
-        guard session.canViewInvoices, connection.status != .unavailable, scenePhase == .active else { return }
+        guard (session.canViewInvoices || session.canViewPickups), connection.status != .unavailable, scenePhase == .active else { return }
         let sessionID = session.contextID
         synchronization.useSession(sessionID)
         let requestedUploadVersion = synchronization.requestedUploadVersion
@@ -65,7 +65,7 @@ struct AppRootView: View {
         let previousDownload = synchronization.lastDownloadedAt
         while true {
             if synchronization.isRunning { await synchronization.waitForCurrentRun() }
-            guard !Task.isCancelled, session.contextID == sessionID, session.canViewInvoices,
+            guard !Task.isCancelled, session.contextID == sessionID, (session.canViewInvoices || session.canViewPickups),
                   connection.status != .unavailable, scenePhase == .active else { return }
             let fulfilled = includesDownloads
                 ? synchronization.lastDownloadedAt != previousDownload
@@ -73,12 +73,29 @@ struct AppRootView: View {
             if fulfilled,
                synchronization.completedUploadVersion >= requestedUploadVersion { return }
             let started = await synchronization.synchronize(includesDownloads: includesDownloads) {
-                let access = try await session.invoiceAccess()
-                if includesDownloads {
-                    try await InvoiceSynchronizer(client: access.client, store: access.store).synchronize()
-                } else {
-                    try await InvoiceMutationUploader(client: access.client, store: access.store).synchronize()
-                }
+                var failure: Error?
+                do {
+                    if session.canViewInvoices {
+                        let access = try await session.invoiceAccess()
+                        if includesDownloads {
+                            try await InvoiceSynchronizer(client: access.client, store: access.store).synchronize()
+                        } else {
+                            try await InvoiceMutationUploader(client: access.client, store: access.store).synchronize()
+                        }
+                    }
+                } catch is CancellationError { throw CancellationError() }
+                catch { failure = error }
+                guard session.contextID == sessionID else { throw APIClientError.sessionChanged }
+                do {
+                    if session.canViewPickups && session.canUpdatePickups {
+                        let access = try await session.pickupAccess()
+                        try await PickupCompletionUploader(client: access.client, store: access.store,
+                            isAuthorized: { session.contextID == sessionID && session.canUpdatePickups }).synchronize()
+                    }
+                } catch is CancellationError { throw CancellationError() }
+                catch { failure = failure ?? error }
+                if let failure { throw failure }
+
             }
             if started { return }
         }

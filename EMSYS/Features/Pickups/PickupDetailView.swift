@@ -3,7 +3,9 @@ import SwiftUI
 struct PickupDetailView: View {
     @Environment(NetworkConnection.self) private var connection
     @State var model: PickupDetailModel
+    @Environment(SynchronizationState.self) private var synchronization
     @State private var confirmsCompletion = false
+    @State private var confirmsDiscard = false
     var createInvoice: ((Pickup, String?) async throws -> InvoiceDraftEditorModel)? = nil
     @State private var invoiceEditor: InvoiceDraftEditorModel?
     @State private var choosesReceiver = false
@@ -26,9 +28,14 @@ struct PickupDetailView: View {
             .disabled(model.isLoading || !online)
         }
         .confirmationDialog("pickups.confirmComplete", isPresented: $confirmsCompletion, titleVisibility: .visible) {
-            Button("pickups.complete") { Task { await model.complete(online: online) } }
+            Button("pickups.complete") { Task { await model.complete(online: online); synchronization.requestUpload() } }
             Button("invoiceEdits.cancel", role: .cancel) { }
-        } message: { Text("pickups.confirmCompleteHint") }
+        } message: { Text("pickupSync.confirmHint") }
+        .confirmationDialog("pickupSync.discardPrompt", isPresented: $confirmsDiscard, titleVisibility: .visible) {
+            Button("pickupSync.useServer", role: .destructive) { Task { await model.discardRejectedCompletion() } }
+            Button("invoiceEdits.cancel", role: .cancel) { }
+        }
+        .onChange(of: synchronization.lastFinishedAt) { Task { await model.refresh(online: false) } }
         .confirmationDialog("pickups.chooseInvoiceReceiver", isPresented: $choosesReceiver, titleVisibility: .visible) {
             ForEach(PickupInvoicePrefill.receivers(in: model.pickup), id: \.id) { receiver in
                 Button(receiver.name ?? "—") { prepareInvoice(receiverID: receiver.id) }
@@ -43,7 +50,7 @@ struct PickupDetailView: View {
         List {
             Section {
                 HStack {
-                    Label(model.pickup.isComplete ? "pickups.completed" : "pickups.pending",
+                    Label(model.pickup.pendingCompletion == true ? "pickupSync.pending" : (model.pickup.isComplete ? "pickups.completed" : "pickups.pending"),
                         systemImage: model.pickup.isComplete ? "checkmark.circle.fill" : "clock")
                         .font(.headline)
                     Spacer()
@@ -108,14 +115,26 @@ struct PickupDetailView: View {
                     if let invoiceIssue { Text(LocalizedStringKey(invoiceIssue)).foregroundStyle(.secondary) }
                 } footer: { Text("pickups.createInvoiceHint") }
             }
-            if model.canComplete {
+            if let operation = model.completion {
+                Section {
+                    Label(LocalizedStringKey(operation.state.title), systemImage: "arrow.triangle.2.circlepath")
+                    Text("pickupSync.retryHint").font(.caption).foregroundStyle(.secondary)
+                    if model.canRetry {
+                        Button("auth.retry") { Task { await model.retryCompletion() } }.disabled(!online || model.isLoading)
+                    }
+                    if operation.state == .needsReview {
+                        Button("pickupSync.useServer") { confirmsDiscard = true }.disabled(!online || model.isLoading)
+                    }
+                }
+            }
+            if model.canPrepareCompletion {
                 Section {
                     Button { confirmsCompletion = true } label: {
                         Label("pickups.complete", systemImage: "checkmark.circle")
                             .font(.headline).frame(maxWidth: .infinity, alignment: .center).padding(.vertical, 8)
                     }
-                    .disabled(!online)
-                } footer: { Text("pickups.completionOnline") }
+                    .disabled(!model.canComplete)
+                } footer: { Text(model.revision == nil ? "pickupSync.downloadRequired" : "pickupSync.offlineHint") }
             }
         }
         .frame(maxWidth: 760)

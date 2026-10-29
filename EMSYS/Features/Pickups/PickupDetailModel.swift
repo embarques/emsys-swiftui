@@ -9,6 +9,8 @@ final class PickupDetailModel {
     private(set) var issue: String?
     private(set) var requiresRefresh = false
     private(set) var isUnavailable = false
+    private(set) var completion: PickupCompletion?
+    private(set) var revision: String?
     @ObservationIgnored private let client: APIClient
     @ObservationIgnored private let store: PickupStore
     @ObservationIgnored private let isAuthorized: () -> Bool
@@ -23,59 +25,98 @@ final class PickupDetailModel {
         self.canUpdate = canUpdate
     }
 
-    var canComplete: Bool { isAuthorized() && canUpdate() && !pickup.isComplete && !isLoading && !requiresRefresh }
+    var canComplete: Bool {
+        isAuthorized() && canUpdate() && !pickup.isComplete && !isLoading && completion == nil && revision != nil && !isUnavailable
+    }
+    var canPrepareCompletion: Bool { isAuthorized() && canUpdate() && !pickup.isComplete && completion == nil }
+    var canRetry: Bool { isAuthorized() && canUpdate() && completion != nil && completion?.state != .needsReview }
 
     func refresh(online: Bool) async {
         guard isAuthorized(), !isLoading else { return }
-        guard online else { return }
         isLoading = true
         issue = nil
         defer { isLoading = false }
         do {
+            try await loadLocal()
+            guard online else { return }
             try await download()
-            requiresRefresh = false
             isUnavailable = false
         } catch { await handleReadFailure(error) }
     }
 
     func complete(online: Bool) async {
-        guard canComplete else { return }
-        guard online else { issue = "pickups.completionOnline"; return }
+        guard canComplete, let revision else { return }
         isLoading = true
         issue = nil
         defer { isLoading = false }
         do {
-            // Only patch the documented field. A read projection must never
-            // replace customer snapshots, route assignments or server metadata.
-            try await download()
-            guard isAuthorized(), canUpdate(), !Task.isCancelled else { return }
-            if pickup.isComplete { return }
-            requiresRefresh = true
-            let updated = try await client.put("pickups/\(pickup.id)",
-                encodedBody: Data(#"{"completed":true}"#.utf8), as: Pickup.self)
-            guard updated.id == pickup.id, updated.completed else { throw APIClientError.invalidResponse }
-            guard isAuthorized() else { return }
-            try await store.save([updated])
-            try await download()
-            guard pickup.completed else { throw APIClientError.invalidResponse }
-            requiresRefresh = false
+            _ = try await store.queueCompletion(id: pickup.id, revision: revision)
+            try await loadLocal()
+            if online {
+                try await PickupCompletionUploader(client: client, store: store, isAuthorized: { self.isAuthorized() && self.canUpdate() }).synchronize()
+                try await loadLocal()
+            }
+        } catch PickupStore.StoreError.changed {
+            issue = "pickupSync.changedLocally"
         } catch {
-            guard isAuthorized() else { return }
-            // Once PUT starts, its outcome can be unknown. Refresh explicitly;
-            // do not automatically replay a mutation lacking a sync contract.
-            if requiresRefresh { issue = "pickups.completionUnknown" }
-            else { await handleReadFailure(error) }
+            if isAuthorized() { issue = "pickupSync.retryHint"; try? await loadLocal() }
         }
     }
 
+    func retryCompletion() async {
+        guard canRetry, let completion, !isLoading else { return }
+        isLoading = true
+        issue = nil
+        defer { isLoading = false }
+        do {
+            try await store.setCompletionState(id: completion.id, state: .pending)
+            try await PickupCompletionUploader(client: client, store: store, isAuthorized: { self.isAuthorized() && self.canUpdate() }).synchronize()
+            try await loadLocal()
+        } catch {
+            if isAuthorized() { issue = "pickupSync.retryHint"; try? await loadLocal() }
+        }
+    }
+
+    /// A conflict is a server rejection, unlike an unknown connection outcome.
+    /// Explicitly accept a newly downloaded server copy before another intent.
+    func discardRejectedCompletion() async {
+        guard completion?.state == .needsReview, isAuthorized(), !isLoading else { return }
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            let snapshot = try await client.get("pickups/sync/\(pickup.id)", as: PickupSyncSnapshot.self)
+            guard isAuthorized(), snapshot.pickup.id == pickup.id else { throw APIClientError.sessionChanged }
+            try await store.discardRejectedCompletion(id: pickup.id, snapshot: snapshot)
+            try await loadLocal()
+            issue = nil
+        } catch { await handleReadFailure(error) }
+    }
+
+    private func loadLocal() async throws {
+        let saved = try await store.pickup(id: pickup.id)
+        let operation = try await store.completion(id: pickup.id)
+        let revision = try await store.revision(id: pickup.id)
+        guard isAuthorized(), !Task.isCancelled else { return }
+        if let saved { pickup = saved }
+        completion = operation
+        self.revision = revision
+        requiresRefresh = operation?.state == .needsReview
+    }
+
     private func download() async throws {
-        let current = try await client.get("pickups/\(pickup.id)", as: Pickup.self)
-        try Task.checkCancellation()
-        guard current.id == pickup.id else { throw APIClientError.invalidResponse }
-        guard isAuthorized() else { throw APIClientError.sessionChanged }
-        try await store.save([current])
-        guard isAuthorized() else { throw APIClientError.sessionChanged }
-        pickup = current
+        do {
+            let snapshot = try await client.get("pickups/sync/\(pickup.id)", as: PickupSyncSnapshot.self)
+            try Task.checkCancellation()
+            guard isAuthorized(), snapshot.pickup.id == pickup.id else { throw APIClientError.sessionChanged }
+            try await store.save(snapshot)
+        } catch APIClientError.httpStatus(404) {
+            // Read-only compatibility is safe. Never fall back to ordinary PUT.
+            let current = try await client.get("pickups/\(pickup.id)", as: Pickup.self)
+            guard isAuthorized(), current.id == pickup.id else { throw APIClientError.sessionChanged }
+            try await store.save([current])
+            issue = "pickupSync.downloadRequired"
+        }
+        try await loadLocal()
     }
 
     private func handleReadFailure(_ error: Error) async {
@@ -83,7 +124,6 @@ final class PickupDetailModel {
         if case APIClientError.httpStatus(let status) = error, status == 403 || status == 404 {
             try? await store.remove(id: pickup.id)
             issue = "pickups.noLongerAvailable"
-            requiresRefresh = true
             isUnavailable = true
         } else { issue = "pickups.refreshError" }
     }
