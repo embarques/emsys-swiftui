@@ -1728,3 +1728,47 @@ package resolution, all suites above, physical-iPhone SDK compilation, Firebase
 identity validation, macOS Release, iOS Simulator Release and diff checks.
 Logs: emsys-verification.KnoG8d. Existing publication PR #1 is merged; this
 increment is submitted separately for review and requires the companion API rollout.
+
+## Scoped pickup invoice customer preparation — 2026-10-28
+
+Reviewed and merged API PR #342 before SwiftUI PR #2; fetched target branches
+and confirmed no target drift from the tested heads before merge. Temporary
+branches were removed locally/remotely. Deployment remains the owner's task.
+Started new API/Apple branches for the assigned-driver invoice prerequisite.
+
+A scoped API read returns only the pickup's sender and selected receiver with
+complete invoice identity/contact/address fields, excluding notes and balances.
+It enforces pickup view plus invoice creation-context authority and current route
+membership for assigned-only context. It does not grant general customer access
+or enable assigned invoice writes. Receiver selection cannot escape the pickup.
+SQLite caches this response per pickup/recipient within the existing protected
+API/user/company partition; denied/hidden pickups cannot use it. The existing
+full-authority mobile invoice entry prefers this context, selects the first
+address for both parties and preserves all returned customer write fields.
+Transport failure may use cached context; confirmed denials do not.
+Older API responses retain the existing full-authority preparation path.
+
+No container or pickup-origin fields were added. Signature, payment capture and
+invoice submission contracts are unchanged. The assigned-only writer, locked
+parties, driver catalog/policy access and queue authorization remain the next
+increment. In particular, no new Create-action permission was seeded: generic
+invoice middleware must be reviewed before granting restricted driver writes.
+
+API checks passed (format, vet, full tests, generated Swagger and served Scalar
+contract tests), including two isolated MongoDB integration runs for selected
+customer validation and assignment revocation even with full pickup view. API
+PR #343 is open. The disposable database process was stopped after testing.
+
+Final Apple tests passed 177 macOS / 181 iPhone / 181 iPad. Inspected actual
+synthetic wizard rendering on iPhone/iPad; the first sender address is selected,
+and the iPad also shows the first recipient address selected. Evidence copies:
+/private/tmp/emsys-prepared-invoice-iphone.png and
+/private/tmp/emsys-prepared-invoice-ipad.png. These do not prove live authentication,
+real company/device integration, dark mode, large text or Mac interaction.
+Xcode stalled collecting simulator diagnostics after every iPad test passed;
+stopped only that run's owned simctl diagnose child to allow remaining builds.
+
+Final serial ./scripts/verify.sh passed: normal-workspace package resolution,
+all suites above, physical-iPhone SDK build, Firebase identity check, macOS
+Release, iOS Simulator Release and diff checks. Logs: emsys-verification.TuMz5X.
+No signing, bundle, dependency versions or live company records changed.
