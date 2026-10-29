@@ -482,6 +482,82 @@ final class InvoiceCreationOutboxTests: XCTestCase {
         XCTAssertThrowsError(try InvoiceCreationPlan(content: content, branch: original.branch))
     }
 
+    func testAssignedPaymentRetryUsesScopedRoutesAndLeavesOrdinaryOperationsUntouched() async throws {
+        let directory = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try await open(directory)
+        let ordinary = try await store.queueInvoiceCreation(draftID: UUID(), expectedRevision: nil, plan: makePlan())
+        var signed = try assignedPlan(payment: "5").content
+        let png = try await SignatureDrawing(strokes: [[.init(x: 0.1, y: 0.2), .init(x: 0.8, y: 0.7)]]).pngData()
+        signed.confirmation = InvoiceDraftConfirmation(contextHash: try InvoiceDraftConfirmation.contextHash(for: signed), policiesAgreed: true, skipSignature: false)
+        signed.senderSignature = InvoiceSenderSignature(signerName: signed.senderName, data: png.base64EncodedString(), contentType: "image/png")
+        let plan = try InvoiceCreationPlan(content: signed, branch: .init(id: 1, name: nil, code: "NY"))
+        let assigned = try await store.queueInvoiceCreation(draftID: UUID(), expectedRevision: nil, plan: plan)
+        let (firstClient, firstSession) = try makeClient([.success(receiptResponse), .failure(.networkConnectionLost)])
+        defer { firstSession.invalidateAndCancel() }
+        do { try await InvoiceCreationUploader(client: firstClient, store: store, assignedOnly: true).synchronize(); XCTFail("Expected lost invoice response") }
+        catch { }
+        XCTAssertEqual(CreationProtocol.paths, ["/v1/journals/sync/assigned/42", "/v1/invoices/sync/create-assigned"])
+        let attempted = try XCTUnwrap(CreationProtocol.bodies.last)
+        let envelope = try XCTUnwrap(JSONSerialization.jsonObject(with: attempted) as? [String: Any])
+        let invoiceBody = try XCTUnwrap(envelope["invoice"] as? [String: Any])
+        XCTAssertEqual((invoiceBody["senderSignature"] as? [String: Any])?["data"] as? String, png.base64EncodedString())
+        XCTAssertNil(invoiceBody["container"])
+        XCTAssertNil(invoiceBody["pickupSource"])
+        let reopened = try await open(directory)
+        let pending = try await reopened.invoiceCreation(draftID: assigned.draftID)
+        XCTAssertEqual(pending?.id, assigned.id)
+        XCTAssertEqual(pending?.invoiceRequest, attempted)
+        XCTAssertEqual(pending?.plan.content.assignedPickup?.pickupID, 42)
+        let (retryClient, retrySession) = try makeClient([.success(invoiceResponse)])
+        defer { retrySession.invalidateAndCancel() }
+        try await InvoiceCreationUploader(client: retryClient, store: reopened, assignedOnly: true).synchronize()
+        XCTAssertEqual(CreationProtocol.paths, ["/v1/invoices/sync/create-assigned"])
+        XCTAssertEqual(CreationProtocol.bodies, [attempted])
+        let untouched = try await reopened.invoiceCreation(draftID: ordinary.draftID)
+        XCTAssertEqual(untouched?.state, .pending)
+        let count = try await reopened.activeInvoiceCreationCount(assignedOnly: true)
+        XCTAssertEqual(count, 0)
+    }
+
+    func testAssignedDraftsKeepPartiesLockedAndRecoverWithoutGeneralInvoiceAccess() async throws {
+        let directory = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try await open(directory)
+        let content = try assignedPlan().content
+        let saved = try await store.saveDraft(id: UUID(), content: content, expectedRevision: nil)
+        let ordinary = try await store.saveDraft(id: UUID(), content: makePlan().content, expectedRevision: nil)
+        let visible = try await store.draftSummaries(assignedOnly: true)
+        XCTAssertEqual(visible.map(\.id), [saved.id])
+        let editor = InvoiceDraftEditorModel(assignedOnlyAccess: true, draftID: saved.id, store: store,
+            canViewCustomers: { true }, currentBranchID: { 1 }, financialPermission: { $0 == .createInvoice }, isAuthorized: { true })
+        await editor.load()
+        XCTAssertTrue(editor.isAvailable)
+        XCTAssertTrue(editor.partiesAreLocked)
+        XCTAssertFalse(editor.canChooseCustomers)
+        editor.setPartyName("Another sender", role: .sender)
+        XCTAssertEqual(editor.content.senderName, content.senderName)
+        XCTAssertNil(editor.content.container)
+        XCTAssertNil(editor.content.pickupSource)
+        let denied = InvoiceDraftEditorModel(assignedOnlyAccess: true, draftID: ordinary.id, store: store, isAuthorized: { true })
+        await denied.load()
+        XCTAssertFalse(denied.isAvailable)
+        var changed = content
+        changed.senderName = "Tampered"
+        XCTAssertThrowsError(try InvoiceCreationPlan(content: changed, branch: .init(id: 1, name: nil, code: "NY")))
+    }
+
+    private func assignedPlan(payment: String? = nil) throws -> InvoiceCreationPlan {
+        let original = try makePlan(payment: payment)
+        var content = original.content
+        content.container = nil
+        content.pickupSource = nil
+        content.pickupEmployee = nil
+        content.pickup = InvoicePickupReference(id: 42)
+        content.assignedPickup = InvoiceAssignedPickup(pickupID: 42, senderID: try XCTUnwrap(content.senderCustomer?.id), receiverID: nil)
+        return try InvoiceCreationPlan(content: content, branch: original.branch)
+    }
+
     private func makePlan(payment amount: String? = nil) throws -> InvoiceCreationPlan {
         let customerData = Data(#"{"id":"000000000000000000000001","name":"Fixture Sender","customerType":1,"email":"sender@example.test","IDNumber":"TEST-ID-42"}"#.utf8)
         var content = InvoiceDraft.Content()

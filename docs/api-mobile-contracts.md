@@ -347,3 +347,29 @@ names, selects the first address for both parties, and can reuse the downloaded
 context offline. Confirmed denial never falls back to a cached context. This is
 preparation only: assigned-only invoice writes and permission seeding remain
 separate work, and no general customer-list authority is granted.
+
+## Assigned-driver invoice writes
+
+POST `/invoices/sync/create-assigned` uses the ordinary frozen invoice sync
+request shape while enforcing current pickup assignment, linked party fields and
+verified user branch. POST `/journals/sync/assigned/:pickupID` uses the existing
+initial-payment sync shape with the same assignment checks before financial effects.
+Both preserve existing idempotency/numbering/accounting behavior and customer
+profiles. Journal permission remains separate. The assigned grant never supplies
+generic invoice actions or history access. No ordinary create fallback is allowed.
+
+Pickup sync pages now include optional `invoiceContexts`: an explicit empty array
+revokes cached preparation, while null/omitted carries no preparation information.
+The server performs a bounded bulk customer lookup. The local operational cache,
+assigned drafts and outbox remain user/API/company scoped. Before field work,
+download pickup pages, item descriptions and active policies while connected.
+The wizard locks sender/recipient, retains first-address selection, and preserves
+senderSignature base64 in frozen requests. Container/origin stay blank.
+
+Roll out the companion API first, add the scoped permission to intended driver
+roles and refresh cached permissions. General invoice views are unnecessary;
+recording payment still needs the existing journal grant. Full-authority web
+routes remain unchanged; older Portal assigned-only callers need the dedicated
+sync path before using the newly seeded permission. Live deployment/tenant seeds
+are not performed by this increment. See the API assigned-driver-invoices contract
+for conflicts, replay and staged payment recovery semantics.

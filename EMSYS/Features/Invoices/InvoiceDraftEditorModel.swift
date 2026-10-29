@@ -29,8 +29,9 @@ final class InvoiceDraftEditorModel: Identifiable {
     @ObservationIgnored private let canReviewPayments: () -> Bool
     @ObservationIgnored private let financialPermission: (InvoiceFinancialPermission) -> Bool
     @ObservationIgnored private let currentBranchID: () -> UInt16?
+    @ObservationIgnored private let assignedOnlyAccess: Bool
 
-    init(draftID: UUID? = nil, initialContent: InvoiceDraft.Content? = nil, store: InvoiceStore, client: APIClient? = nil,
+    init(assignedOnlyAccess: Bool = false, draftID: UUID? = nil, initialContent: InvoiceDraft.Content? = nil, store: InvoiceStore, client: APIClient? = nil,
          canViewItemCatalog: @escaping () -> Bool = { false },
          canViewCustomers: @escaping () -> Bool = { false }, canReviewPolicies: @escaping () -> Bool = { false },
          canViewContainers: @escaping () -> Bool = { false },
@@ -53,6 +54,7 @@ final class InvoiceDraftEditorModel: Identifiable {
         self.canViewAssignments = canViewAssignments
         self.canReviewPayments = canReviewPayments
         self.currentBranchID = currentBranchID
+        self.assignedOnlyAccess = assignedOnlyAccess
         self.financialPermission = financialPermission
     }
 
@@ -60,7 +62,7 @@ final class InvoiceDraftEditorModel: Identifiable {
     private(set) var attachmentsSaved = false
     private(set) var attachmentStatuses: [PendingInvoiceAttachment] = []
     var canAttachDocuments: Bool {
-        isAvailable && financialPermission(.uploadDocument) && creation == nil && isLoaded && !isSaving && !hasConflict && !isLoadingCustomerDetails && !isLoadingPolicies && !isPreparingSignature
+        !partiesAreLocked && isAvailable && financialPermission(.uploadDocument) && creation == nil && isLoaded && !isSaving && !hasConflict && !isLoadingCustomerDetails && !isLoadingPolicies && !isPreparingSignature
     }
 
     func importAttachment(url: URL) async {
@@ -557,10 +559,11 @@ final class InvoiceDraftEditorModel: Identifiable {
         return nil
     }
 
-    var isAvailable: Bool { isAuthorized() }
+    var isAvailable: Bool { isAuthorized() && (!assignedOnlyAccess || !isLoaded || content.assignedPickup?.matches(content) == true) }
+    var partiesAreLocked: Bool { content.assignedPickup != nil || assignedOnlyAccess }
     var hasChanges: Bool { isLoaded && content != original }
     var canSave: Bool { creation == nil && isAvailable && hasChanges && !isLoading && !isSaving && !isLoadingPolicies && !isPreparingSignature && !isLoadingCustomerDetails }
-    var canChooseCustomers: Bool { isAvailable && canViewCustomers() && client != nil && isLoaded && !isSaving }
+    var canChooseCustomers: Bool { !partiesAreLocked && isAvailable && canViewCustomers() && client != nil && isLoaded && !isSaving }
     var canLoadPolicies: Bool { isAvailable && canReviewPolicies() && client != nil && isLoaded && !isSaving }
     var canChooseContainer: Bool { isAvailable && canViewContainers() && client != nil && isLoaded && !isSaving }
     var canOpenPaymentReview: Bool { isAvailable && canReviewPayments() && client != nil && isLoaded && !isSaving }
@@ -674,6 +677,7 @@ final class InvoiceDraftEditorModel: Identifiable {
     }
 
     func setPartyName(_ name: String, role: InvoiceCustomer.Role) {
+        guard !partiesAreLocked else { return }
         switch role {
         case .sender:
             if content.senderName != name { content.senderCustomer = nil; content.senderWriteSnapshot = nil; content.senderAddressID = nil }

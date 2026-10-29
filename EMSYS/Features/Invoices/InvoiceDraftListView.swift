@@ -21,7 +21,7 @@ struct InvoiceDraftListView: View {
                 ToolbarItem(placement: .cancellationAction) { Button("documents.close") { dismiss() } }
                 ToolbarItem(placement: .primaryAction) {
                     Button { editor = model.editor() } label: { Label("drafts.new", systemImage: "plus") }
-                        .disabled(!model.isAvailable)
+                        .disabled(!model.isAvailable || model.assignedOnly)
                 }
             }
             .safeAreaInset(edge: .top, spacing: 0) { ConnectionStatusView() }

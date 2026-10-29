@@ -20,7 +20,7 @@ nonisolated struct InvoiceCreationPlan: Codable, Sendable {
     var requiresJournal: Bool { ((try? validated().totals.payment) ?? 0) > 0 }
 
     private func validated() throws -> (amounts: InvoiceDraftAmounts, totals: InvoiceDraftPayment.Totals) {
-        guard branch.id > 0, content.date.pickerDate != nil, content.pickup?.id != 0,
+        guard content.assignedPickup?.matches(content) != false, branch.id > 0, content.date.pickerDate != nil, content.pickup?.id != 0,
               let sender = content.senderCustomer, let senderWrite = content.senderWriteSnapshot,
               senderWrite.matches(sender), content.senderName == sender.name,
               let payment = content.payment,

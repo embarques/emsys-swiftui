@@ -133,6 +133,16 @@ actor PickupStore {
 
     private nonisolated static func write(_ snapshot: PickupSyncSnapshot, in database: Database) throws {
         let payload = try JSONEncoder().encode(snapshot.pickup)
+        if snapshot.invoiceContexts != nil {
+            // An authoritative preparation page can revoke previously downloaded
+            // context. A detail/older-server response omits this information.
+            try database.execute(sql: "DELETE FROM pickupInvoiceContexts WHERE pickupID = ?", arguments: [snapshot.pickup.id])
+        }
+        for context in snapshot.invoiceContexts ?? [] {
+            guard context.revision == snapshot.revision, context.matches(snapshot.pickup, receiverID: context.receiver?.id) else { throw StoreError.invalidRecords }
+            try database.execute(sql: "INSERT INTO pickupInvoiceContexts (pickupID, receiverID, payload) VALUES (?, ?, ?) ON CONFLICT(pickupID, receiverID) DO UPDATE SET payload = excluded.payload",
+                arguments: [snapshot.pickup.id, context.receiver?.id ?? "", try JSONEncoder().encode(context)])
+        }
         try database.execute(sql: "INSERT INTO pickupSnapshots (id, payload, revision, synchronizedAt) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET payload = excluded.payload, revision = excluded.revision, synchronizedAt = excluded.synchronizedAt, hidden = 0",
             arguments: [snapshot.pickup.id, payload, snapshot.revision, Date.now.timeIntervalSince1970])
     }

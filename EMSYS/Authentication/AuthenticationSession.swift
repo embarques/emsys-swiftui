@@ -84,6 +84,12 @@ final class AuthenticationSession {
         canViewInvoices && permissions?.contains("canCreateInvoice", resourceType: "invoice") == true
     }
 
+    var canCreateAssignedPickupInvoices: Bool {
+        phase == .signedIn && canViewPickups && permissions?.contains("canCreateAssignedInvoice", resourceType: "invoice") == true
+    }
+
+    var canCreatePickupInvoices: Bool { canCreateInvoices || canCreateAssignedPickupInvoices }
+
     var canPrintInvoices: Bool {
         canViewInvoices && permissions?.contains("canPrintInvoice", resourceType: "invoice") == true
     }
@@ -105,8 +111,8 @@ final class AuthenticationSession {
         canViewInvoices && permissions?.contains("canUpdateInvoice", resourceType: "invoice") == true
     }
 
-    func invoiceAccess() async throws -> (client: APIClient, store: InvoiceStore) {
-        guard canViewInvoices, let apiBaseURL,
+    func invoiceAccess(allowAssignedCreation: Bool = false) async throws -> (client: APIClient, store: InvoiceStore) {
+        guard (canViewInvoices || allowAssignedCreation && canCreateAssignedPickupInvoices), let apiBaseURL,
               let userID = auth?.currentUser?.uid, let companyID else {
             throw AuthenticationIssue.authorization
         }
@@ -120,9 +126,9 @@ final class AuthenticationSession {
             directory: supportDirectory.appending(path: "EMSYS/Invoices", directoryHint: .isDirectory),
             userID: userID, companyID: companyID, apiEnvironment: apiBaseURL.absoluteString
         )
-        guard sessionID == generation, canViewInvoices else { throw APIClientError.sessionChanged }
+        guard sessionID == generation, (canViewInvoices || allowAssignedCreation && canCreateAssignedPickupInvoices) else { throw APIClientError.sessionChanged }
         let client = try APIClient(baseURL: apiBaseURL) { [weak self] forceRefresh in
-            guard let self, self.canViewInvoices, self.generation == sessionID else {
+            guard let self, (self.canViewInvoices || allowAssignedCreation && self.canCreateAssignedPickupInvoices), self.generation == sessionID else {
                 throw APIClientError.sessionChanged
             }
             return try await self.credentials(forceRefresh: forceRefresh)

@@ -4,6 +4,7 @@ nonisolated struct PickupSyncSnapshot: Codable, Sendable {
     let pickup: Pickup
     let revision: String
     var requestId: String? = nil
+    var invoiceContexts: [PickupInvoiceContext]? = nil
 
     var isValid: Bool {
         pickup.id > 0 && revision.hasPrefix("v1:") && revision.count == 67

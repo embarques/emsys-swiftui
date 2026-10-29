@@ -172,14 +172,22 @@ struct InvoiceDraftEditorView: View {
     private var customerDetails: some View {
         @Bindable var model = model
         return Section("invoiceCreation.step.customers") {
-                TextField("invoices.sender", text: Binding(
-                    get: { model.content.senderName }, set: { model.setPartyName($0, role: .sender) }))
+                if model.partiesAreLocked {
+                    LabeledContent("invoices.sender", value: model.content.senderName)
+                } else {
+                    TextField("invoices.sender", text: Binding(
+                        get: { model.content.senderName }, set: { model.setPartyName($0, role: .sender) }))
+                }
                 if model.canChooseCustomers {
                     Button("customers.chooseSender") { customerSearch = model.customerSearch(role: .sender) }
                 }
                 customerAddress(model.content.senderCustomer, selection: $model.content.senderAddressID)
-                TextField("invoices.receiver", text: Binding(
-                    get: { model.content.receiverName }, set: { model.setPartyName($0, role: .receiver) }))
+                if model.partiesAreLocked {
+                    LabeledContent("invoices.receiver", value: model.content.receiverName)
+                } else {
+                    TextField("invoices.receiver", text: Binding(
+                        get: { model.content.receiverName }, set: { model.setPartyName($0, role: .receiver) }))
+                }
                 if model.canChooseCustomers {
                     Button("customers.chooseReceiver") { customerSearch = model.customerSearch(role: .receiver) }
                 }
@@ -395,7 +403,7 @@ struct InvoiceDraftEditorView: View {
     @ViewBuilder
     private func customerAddress(_ customer: InvoiceCustomer?, selection: Binding<String?>) -> some View {
         if let customer {
-            Text("customers.selectedHint").font(.caption).foregroundStyle(.secondary)
+            Text(model.partiesAreLocked ? "invoiceCreation.assignedCustomerHint" : "customers.selectedHint").font(.caption).foregroundStyle(.secondary)
             Picker("customers.address", selection: selection) {
                 Text("customers.chooseAddress").tag(nil as String?)
                 ForEach((customer.addresses ?? []).filter { $0.id != nil }) { address in
