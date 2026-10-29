@@ -8,6 +8,11 @@ full gate must pass before advancing.
 
 ## Checks
 
+The gate first exercises Xcode Cloud Firebase provisioning with synthetic
+configuration, including retries and invalid/missing inputs. No real Firebase
+values are used in those checks. See [Xcode Cloud delivery](xcode-cloud.md) for
+the separate signed cloud archive and TestFlight acceptance steps.
+
 1. Resolve the checked-in Package.resolved versions in the normal Xcode workspace.
    No temporary DerivedData path, dependency upgrades or cache resets are used.
 2. Discover actual eligible simulator destinations. Both iPhone and iPad must be

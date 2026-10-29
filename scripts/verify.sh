@@ -33,6 +33,7 @@ verify() {
 }
 
 common=(-project "$project" -scheme EMSYS)
+verify xcode-cloud-setup python3 "$project_root/scripts/test-xcode-cloud-setup.py"
 verify packages xcodebuild "${common[@]}" -resolvePackageDependencies -onlyUsePackageVersionsFromResolvedFile
 verify destinations xcodebuild "${common[@]}" -showdestinations -disableAutomaticPackageResolution
 verify simulators xcrun simctl list devices available --json
