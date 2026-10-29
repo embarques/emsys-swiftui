@@ -82,6 +82,9 @@ struct AppRootView: View {
                         } else {
                             try await InvoiceMutationUploader(client: access.client, store: access.store).synchronize()
                         }
+                    } else if session.canCreateAssignedPickupInvoices {
+                        let access = try await session.invoiceAccess(allowAssignedCreation: true)
+                        try await InvoiceCreationUploader(client: access.client, store: access.store, assignedOnly: true).synchronize()
                     }
                 } catch is CancellationError { throw CancellationError() }
                 catch { failure = error }
@@ -91,6 +94,14 @@ struct AppRootView: View {
                         let access = try await session.pickupAccess()
                         try await PickupCompletionUploader(client: access.client, store: access.store,
                             isAuthorized: { session.contextID == sessionID && session.canUpdatePickups }).synchronize()
+                    }
+                } catch is CancellationError { throw CancellationError() }
+                catch { failure = failure ?? error }
+                do {
+                    if includesDownloads, session.canCreateAssignedPickupInvoices {
+                        let access = try await session.invoiceAccess(allowAssignedCreation: true)
+                        try await AssignedInvoicePreparation(client: access.client, store: access.store,
+                            isAuthorized: { session.contextID == sessionID && session.canCreateAssignedPickupInvoices }).download()
                     }
                 } catch is CancellationError { throw CancellationError() }
                 catch { failure = failure ?? error }

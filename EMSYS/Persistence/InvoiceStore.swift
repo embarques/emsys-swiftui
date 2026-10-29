@@ -258,6 +258,12 @@ actor InvoiceStore {
             try database.create(index: "invoiceAttachmentsByDraft", on: "invoiceAttachments", columns: ["draftID"])
             try database.create(index: "invoiceAttachmentsByState", on: "invoiceAttachments", columns: ["state"])
         }
+        migrator.registerMigration("scopeAssignedInvoiceDrafts") { database in
+            try database.alter(table: "invoiceDrafts") { $0.add(column: "assignedOnly", .boolean).notNull().defaults(to: false) }
+            try database.alter(table: "invoiceCreations") { $0.add(column: "assignedOnly", .boolean).notNull().defaults(to: false) }
+            try database.create(index: "assignedInvoiceDrafts", on: "invoiceDrafts", columns: ["assignedOnly", "savedAt", "id"])
+            try database.create(index: "assignedInvoiceCreations", on: "invoiceCreations", columns: ["assignedOnly", "state", "createdAt"])
+        }
         try migrator.migrate(database)
         let savedEnvironment = try database.read { try String.fetchOne($0, sql: "SELECT apiEnvironment FROM invoiceCacheMetadata WHERE id = 1") }
         guard savedEnvironment == environment else { throw StoreError.invalidScope }
@@ -731,13 +737,14 @@ extension InvoiceStore {
 
 
 extension InvoiceStore {
-    func draftSummaries(limit: Int = 40, offset: Int = 0) throws -> [InvoiceDraftSummary] {
+    func draftSummaries(limit: Int = 40, offset: Int = 0, assignedOnly: Bool = false) throws -> [InvoiceDraftSummary] {
         guard (1...100).contains(limit), offset >= 0 else { throw StoreError.invalidPage }
         return try database.read { database in
             try Row.fetchAll(database, sql: """
                 SELECT d.id, d.revision, d.savedAt, d.senderName, d.receiverName, d.itemCount, c.state AS creationState,
                     (SELECT COUNT(*) FROM invoiceAttachments a WHERE a.draftID = d.id AND a.invoiceID IS NOT NULL AND a.state != 'completed') AS pendingAttachmentCount
                 FROM invoiceDrafts d LEFT JOIN invoiceCreations c ON c.draftID = d.id
+                WHERE \(assignedOnly ? "d.assignedOnly = 1" : "1")
                 ORDER BY d.savedAt DESC, d.id DESC LIMIT ? OFFSET ?
                 """, arguments: [limit, offset]).map { row in
                 guard let id = UUID(uuidString: row["id"]) else { throw StoreError.invalidDraft }
@@ -795,6 +802,7 @@ extension InvoiceStore {
                     content.receiverName, content.items.count, payload])
         }
         guard database.changesCount == 1 else { throw StoreError.draftChanged }
+        try database.execute(sql: "UPDATE invoiceDrafts SET assignedOnly = ? WHERE id = ?", arguments: [content.assignedPickup != nil, id.uuidString])
         // Metadata can only refer to bytes already staged for this exact draft.
         for attachment in content.attachments ?? [] {
             guard let stored = try Data.fetchOne(database, sql: "SELECT metadata FROM invoiceAttachments WHERE id = ? AND draftID = ?",
@@ -917,6 +925,7 @@ extension InvoiceStore {
                         plan.content.receiverName, plan.content.items.count, content])
             }
             guard database.changesCount == 1 else { throw StoreError.draftChanged }
+            try database.execute(sql: "UPDATE invoiceDrafts SET assignedOnly = ? WHERE id = ?", arguments: [plan.content.assignedPickup != nil, draftID.uuidString])
             for attachment in plan.content.attachments ?? [] {
                 guard let stored = try Data.fetchOne(database, sql: "SELECT metadata FROM invoiceAttachments WHERE id = ? AND draftID = ?", arguments: [attachment.id.uuidString, draftID.uuidString]),
                       try JSONDecoder().decode(InvoiceAttachment.self, from: stored) == attachment else { throw StoreError.invalidDraft }
@@ -926,6 +935,7 @@ extension InvoiceStore {
                 INSERT INTO invoiceCreations (id, draftID, state, plan, journalRequest, journalHash, invoiceRequest, invoiceHash, createdAt)
                 VALUES (?, ?, 'pending', ?, ?, ?, ?, ?, ?)
                 """, arguments: [operationID.uuidString, draftID.uuidString, frozen, journal, journal.map { Data(SHA256.hash(data: $0)) }, invoice, invoice.map { Data(SHA256.hash(data: $0)) }, now.timeIntervalSince1970])
+            try database.execute(sql: "UPDATE invoiceCreations SET assignedOnly = ? WHERE id = ?", arguments: [plan.content.assignedPickup != nil, operationID.uuidString])
             return PendingInvoiceCreation(id: operationID, draftID: draftID, state: .pending,
                 plan: plan, journalRequest: journal, invoiceRequest: invoice, invoiceID: nil)
         }
@@ -938,15 +948,15 @@ extension InvoiceStore {
         }
     }
 
-    func pendingInvoiceCreations() throws -> [PendingInvoiceCreation] {
+    func pendingInvoiceCreations(assignedOnly: Bool = false) throws -> [PendingInvoiceCreation] {
         try database.read {
-            try Row.fetchAll($0, sql: "SELECT * FROM invoiceCreations WHERE state = 'pending' ORDER BY createdAt LIMIT 40")
+            try Row.fetchAll($0, sql: "SELECT * FROM invoiceCreations WHERE state = 'pending' \(assignedOnly ? "AND assignedOnly = 1" : "") ORDER BY createdAt LIMIT 40")
                 .map(Self.decodeInvoiceCreation)
         }
     }
 
-    func activeInvoiceCreationCount() throws -> Int {
-        try database.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM invoiceCreations WHERE state != 'completed'") ?? 0 }
+    func activeInvoiceCreationCount(assignedOnly: Bool = false) throws -> Int {
+        try database.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM invoiceCreations WHERE state != 'completed' \(assignedOnly ? "AND assignedOnly = 1" : "")") ?? 0 }
     }
 
     func setInvoiceCreationState(id: UUID, state: PendingInvoiceCreation.State) throws {

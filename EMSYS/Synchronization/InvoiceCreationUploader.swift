@@ -5,23 +5,26 @@ struct InvoiceCreationUploader {
     enum UploadError: Error { case attentionRequired }
     let client: APIClient
     let store: InvoiceStore
+    var assignedOnly = false
 
     func synchronize() async throws {
         var needsAttention = false
         while true {
-            let operations = try await store.pendingInvoiceCreations()
+            let operations = try await store.pendingInvoiceCreations(assignedOnly: assignedOnly)
             guard !operations.isEmpty else { break }
             for operation in operations {
                 try Task.checkCancellation()
                 do {
                     if operation.invoiceRequest == nil, let journal = operation.journalRequest {
-                        let receipt = try await client.post("journals/sync", encodedBody: journal, as: InvoiceInitialPaymentReceipt.self)
+                        let path = operation.plan.content.assignedPickup.map { "journals/sync/assigned/\($0.pickupID)" } ?? "journals/sync"
+                        let receipt = try await client.post(path, encodedBody: journal, as: InvoiceInitialPaymentReceipt.self)
                         try Task.checkCancellation()
                         try await store.saveInitialPaymentReceipt(creationID: operation.id, receipt: receipt)
                     }
                     guard let current = try await store.invoiceCreation(draftID: operation.draftID),
                           current.state == .pending, let request = current.invoiceRequest else { continue }
-                    let invoice = try await client.post("invoices/sync/create", encodedBody: request, as: Invoice.self)
+                    let path = current.plan.content.assignedPickup == nil ? "invoices/sync/create" : "invoices/sync/create-assigned"
+                    let invoice = try await client.post(path, encodedBody: request, as: Invoice.self)
                     try Task.checkCancellation()
                     try await store.completeInvoiceCreation(id: operation.id, invoice: invoice)
                 } catch APIClientError.httpStatus(let status) where [400, 409, 422].contains(status) {
@@ -41,7 +44,7 @@ struct InvoiceCreationUploader {
                 }
             }
         }
-        let remaining = try await store.activeInvoiceCreationCount()
+        let remaining = try await store.activeInvoiceCreationCount(assignedOnly: assignedOnly)
         if needsAttention || remaining > 0 { throw UploadError.attentionRequired }
     }
 }

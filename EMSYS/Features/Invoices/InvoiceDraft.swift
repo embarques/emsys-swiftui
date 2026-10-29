@@ -3,6 +3,7 @@ import Foundation
 /// An unfinished local form. It has no server invoice number or financial status.
 nonisolated struct InvoiceDraft: Identifiable, Sendable {
     struct Content: Codable, Equatable, Sendable {
+        var assignedPickup: InvoiceAssignedPickup?
         var pickup: InvoicePickupReference?
         var attachments: [InvoiceAttachment]?
         var senderSignature: InvoiceSenderSignature?
@@ -30,7 +31,7 @@ nonisolated struct InvoiceDraft: Identifiable, Sendable {
         init() { }
 
         private enum CodingKeys: String, CodingKey {
-            case pickup, attachments, senderSignature, confirmation, wizardStep
+            case assignedPickup, pickup, attachments, senderSignature, confirmation, wizardStep
             case senderWriteSnapshot, receiverWriteSnapshot, senderCustomer, receiverCustomer
             case senderAddressID, receiverAddressID, policies, container, pickupSource
             case pickupRoute, pickupEmployee, payment, paymentRegion, paymentReview
@@ -39,6 +40,7 @@ nonisolated struct InvoiceDraft: Identifiable, Sendable {
 
         init(from decoder: Decoder) throws {
             let fields = try decoder.container(keyedBy: CodingKeys.self)
+            assignedPickup = try fields.decodeIfPresent(InvoiceAssignedPickup.self, forKey: .assignedPickup)
             pickup = try fields.decodeIfPresent(InvoicePickupReference.self, forKey: .pickup)
             attachments = try fields.decodeIfPresent([InvoiceAttachment].self, forKey: .attachments)
             senderSignature = try fields.decodeIfPresent(InvoiceSenderSignature.self, forKey: .senderSignature)

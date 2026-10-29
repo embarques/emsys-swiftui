@@ -21,8 +21,9 @@ final class InvoiceDraftListModel: Identifiable {
     @ObservationIgnored private let canReviewPayments: () -> Bool
     @ObservationIgnored private let financialPermission: (InvoiceFinancialPermission) -> Bool
     @ObservationIgnored private let currentBranchID: () -> UInt16?
+    let assignedOnly: Bool
 
-    init(store: InvoiceStore, client: APIClient? = nil, canViewItemCatalog: @escaping () -> Bool = { false },
+    init(assignedOnly: Bool = false, store: InvoiceStore, client: APIClient? = nil, canViewItemCatalog: @escaping () -> Bool = { false },
          canViewCustomers: @escaping () -> Bool = { false },
          canReviewPolicies: @escaping () -> Bool = { false },
          canViewContainers: @escaping () -> Bool = { false },
@@ -30,6 +31,7 @@ final class InvoiceDraftListModel: Identifiable {
          canReviewPayments: @escaping () -> Bool = { false }, currentBranchID: @escaping () -> UInt16? = { nil },
          financialPermission: @escaping (InvoiceFinancialPermission) -> Bool = { _ in false },
          isAuthorized: @escaping () -> Bool) {
+        self.assignedOnly = assignedOnly
         self.store = store
         self.isAuthorized = isAuthorized
         self.client = client
@@ -46,7 +48,7 @@ final class InvoiceDraftListModel: Identifiable {
     var isAvailable: Bool { isAuthorized() }
 
     func editor(draftID: UUID? = nil) -> InvoiceDraftEditorModel {
-        InvoiceDraftEditorModel(draftID: draftID, store: store, client: client,
+        InvoiceDraftEditorModel(assignedOnlyAccess: assignedOnly, draftID: draftID, store: store, client: client,
             canViewItemCatalog: canViewItemCatalog, canViewCustomers: canViewCustomers, canReviewPolicies: canReviewPolicies,
             canViewContainers: canViewContainers, canViewAssignments: canViewAssignments,
             canReviewPayments: canReviewPayments, currentBranchID: currentBranchID, financialPermission: financialPermission, isAuthorized: isAuthorized)
@@ -61,7 +63,7 @@ final class InvoiceDraftListModel: Identifiable {
         issue = nil
         defer { if requestID == request { isLoading = false } }
         do {
-            let saved = try await store.draftSummaries(offset: (self.page - 1) * 40)
+            let saved = try await store.draftSummaries(offset: (self.page - 1) * 40, assignedOnly: assignedOnly)
             guard requestID == request, isAuthorized(), !Task.isCancelled else { return }
             drafts = saved
         } catch {

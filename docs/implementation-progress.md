@@ -1772,3 +1772,61 @@ Final serial ./scripts/verify.sh passed: normal-workspace package resolution,
 all suites above, physical-iPhone SDK build, Firebase identity check, macOS
 Release, iOS Simulator Release and diff checks. Logs: emsys-verification.TuMz5X.
 No signing, bundle, dependency versions or live company records changed.
+
+## Assigned-driver invoice creation — 2026-10-29
+
+Implemented the approved next field-work increment on fresh API/Apple branches.
+The native pickup action accepts the explicit assigned invoice grant without
+requiring general invoice views. API assigned invoice and initial-payment sync
+routes enforce current route membership and linked customer fields in the same
+transaction as their existing business effects/receipts. The scoped grant is
+excluded from generic invoice actions, so it cannot reach ordinary create/list/
+read/update routes. Catalog list/search and active policy reads accept the scoped
+grant without granting settings/customer/invoice browsing. Seeds include the new
+permission and Administrator reference; no live company/role mutation is run.
+
+Pickup preparation downloads customer contexts through one bounded bulk lookup,
+not one request per pickup. Authoritative empty preparation clears stale context;
+pending drafts/requests retain their own customer fields. The wizard locks party
+identities, selects first addresses and uses the verified branch payment code.
+No container or pickup-origin fields were added. SQLite persists assigned draft
+metadata/indexes, frozen plans, signatures and exact request bytes. Drivers can
+reopen assigned drafts from Pickups; blank unrestricted drafts are disabled.
+The scoped uploader processes only assigned operations when general invoice access
+is absent and uses dedicated assigned invoice/payment routes. General invoice
+history/edit/attachment uploads are not exposed by the assigned grant.
+
+Initial payments still require journal-create authority, discounts their existing
+grant, and noncash account selection its existing read permission. Native does
+not manage Cuadres or select accounting periods. The API records the same pending
+invoice/daily-income effects as the established journal workflow. Neither assigned
+invoice nor assigned payment mutates customer profiles. Numbering stays with the
+existing API; signatures remain senderSignature with bare base64 data.
+
+Regression coverage adds protected grant semantics, ordinary-route denial,
+customer field/address validation, seed alignment, preparation revocation, scoped
+queue/draft recovery and payment-confirmed/invoice-response-lost retries with
+base64 signatures. A disposable loopback MongoDB test passed twice for unpaid
+invoices, paid pending-invoice completion, replay, assignment revocation and
+unchanged profiles; no live environment files or company data were used.
+
+Final API checks passed: format, vet, full tests and generated/served Swagger/
+Scalar contracts. The 50-pickup preparation fixture emitted one projected customer
+lookup. Real transaction tests passed twice again after authorization review;
+the task-owned disposable MongoDB process was stopped. API PR #345 is open.
+
+Final Apple suites passed 179 macOS / 183 iPhone / 183 iPad tests. Inspected the
+actual synthetic Spanish wizard on iPhone/iPad: sender/recipient are fixed labeled
+values, first addresses are selected and the hint accurately describes address
+selection. Evidence: /private/tmp/emsys-assigned-invoice-iphone.png and
+/private/tmp/emsys-assigned-invoice-ipad.png. These fixtures do not establish live
+Firebase login, physical-device sync, actual printing, dark mode, large text or
+Mac interaction. The owner has deferred live integration; no credentials, signing,
+bundle identifiers or production records were changed. Deployment, live role
+assignment and permission refresh are separate rollout actions.
+
+Final serial ./scripts/verify.sh passed without intervention: normal-workspace
+package resolution, all suites above, physical-iPhone SDK compilation, packaged
+Firebase identity validation, macOS Release, iOS Simulator Release and diff checks.
+Logs: emsys-verification.zJotLc. This increment is submitted in separate API and
+Apple PRs for review; no merge or deployment is included in standalone execution.

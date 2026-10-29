@@ -7,6 +7,7 @@ struct PickupListView: View {
     @State private var query = PickupListQuery()
     @State private var issue: String?
     @State private var refreshVersion = 0
+    @State private var invoiceDrafts: InvoiceDraftListModel?
 
     private var online: Bool { connection.status != .unavailable }
 
@@ -32,7 +33,7 @@ struct PickupListView: View {
                 ForEach(model.pickups) { pickup in
                     NavigationLink {
                         PickupDetailView(model: model.detail(pickup, canUpdate: { session.canUpdatePickups }),
-                            createInvoice: session.canCreateInvoices ? { pickup, receiverID in
+                            createInvoice: session.canCreatePickupInvoices ? { pickup, receiverID in
                                 try await session.pickupInvoiceEditor(pickup, receiverID: receiverID)
                             } : nil)
                             .onDisappear { refreshVersion += 1 }
@@ -51,7 +52,16 @@ struct PickupListView: View {
         }
         .navigationTitle("navigation.pickups")
         .searchable(text: $query.text, prompt: "pickups.search")
+        .sheet(item: $invoiceDrafts) { InvoiceDraftListView(model: $0) }
         .toolbar {
+            if session.canCreatePickupInvoices {
+                Button {
+                    Task {
+                        do { invoiceDrafts = try await session.pickupInvoiceDrafts() }
+                        catch { issue = "drafts.loadError" }
+                    }
+                } label: { Label("drafts.title", systemImage: "doc.badge.plus") }
+            }
             Button { retry() } label: { Label("sync.now", systemImage: "arrow.clockwise") }
                 .disabled(model?.isLoading == true)
         }

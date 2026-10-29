@@ -1686,6 +1686,23 @@
         }
       }
     },
+    "invoiceCreation.assignedCustomerHint": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Customer linked to this pickup. You can choose one of their addresses."
+          }
+        },
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cliente vinculado a esta recogida. Puedes seleccionar una de sus direcciones."
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "invoiceCreation.assignmentRequired": {
       "extractionState": "manual",
       "localizations": {
