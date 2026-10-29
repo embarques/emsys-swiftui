@@ -6,11 +6,33 @@
 	objectVersion = 110;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		B20000000000000000000001 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = B20000000000000000000002 /* FirebaseAuth */; };
+		B20000000000000000000003 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = B20000000000000000000004 /* FirebaseFirestore */; };
+		B30000000000000000000001 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = B30000000000000000000002 /* GRDB */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		A10000000000000000000006 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C7C19CEB308C7E7700560DF0 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = C7C19CF2308C7E7700560DF0;
+			remoteInfo = EMSYS;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
+		A10000000000000000000001 /* EMSYSTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = EMSYSTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C7C19CF3308C7E7700560DF0 /* EMSYS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = EMSYS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		A10000000000000000000002 /* EMSYSTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = EMSYSTests;
+			sourceTree = "<group>";
+		};
 		C7C19CF5308C7E7700560DF0 /* EMSYS */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = EMSYS;
@@ -19,9 +41,17 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		A10000000000000000000004 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+			);
+		};
 		C7C19CF0308C7E7700560DF0 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
+				B30000000000000000000001 /* GRDB in Frameworks */,
+				B20000000000000000000001 /* FirebaseAuth in Frameworks */,
+				B20000000000000000000003 /* FirebaseFirestore in Frameworks */,
 			);
 		};
 /* End PBXFrameworksBuildPhase section */
@@ -31,6 +61,7 @@
 			isa = PBXGroup;
 			children = (
 				C7C19CF5308C7E7700560DF0 /* EMSYS */,
+				A10000000000000000000002 /* EMSYSTests */,
 				C7C19CF4308C7E7700560DF0 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -39,6 +70,7 @@
 			isa = PBXGroup;
 			children = (
 				C7C19CF3308C7E7700560DF0 /* EMSYS.app */,
+				A10000000000000000000001 /* EMSYSTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -46,6 +78,27 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		A10000000000000000000008 /* EMSYSTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A10000000000000000000009 /* Build configuration list for PBXNativeTarget "EMSYSTests" */;
+			buildPhases = (
+				A10000000000000000000003 /* Sources */,
+				A10000000000000000000004 /* Frameworks */,
+				A10000000000000000000005 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A10000000000000000000007 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				A10000000000000000000002 /* EMSYSTests */,
+			);
+			name = EMSYSTests;
+			productName = EMSYSTests;
+			productReference = A10000000000000000000001 /* EMSYSTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		C7C19CF2308C7E7700560DF0 /* EMSYS */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = C7C19CFE308C7E7800560DF0 /* Build configuration list for PBXNativeTarget "EMSYS" */;
@@ -60,6 +113,11 @@
 				C7C19CF5308C7E7700560DF0 /* EMSYS */,
 			);
 			name = EMSYS;
+			packageProductDependencies = (
+				B30000000000000000000002 /* GRDB */,
+				B20000000000000000000002 /* FirebaseAuth */,
+				B20000000000000000000004 /* FirebaseFirestore */,
+			);
 			productName = EMSYS;
 			productReference = C7C19CF3308C7E7700560DF0 /* EMSYS.app */;
 			productType = "com.apple.product-type.application";
@@ -76,29 +134,45 @@
 				TargetAttributes = {
 					C7C19CF2308C7E7700560DF0 = {
 						CreatedOnToolsVersion = 27.1;
+						SystemCapabilities = {
+							com.apple.KeychainSharing = {
+								enabled = 1;
+							};
+						};
 					};
 				};
 			};
 			buildConfigurationList = C7C19CEE308C7E7700560DF0 /* Build configuration list for PBXProject "EMSYS" */;
-			developmentRegion = en;
+			developmentRegion = "es-DO";
 			hasScannedForEncodings = 0;
 			knownRegions = (
+				"es-DO",
 				en,
 				Base,
 			);
 			mainGroup = C7C19CEA308C7E7700560DF0;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				B30000000000000000000003 /* XCRemoteSwiftPackageReference "GRDB.swift" */,
+				B20000000000000000000005 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = C7C19CF4308C7E7700560DF0 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
+				A10000000000000000000008 /* EMSYSTests */,
 				C7C19CF2308C7E7700560DF0 /* EMSYS */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		A10000000000000000000005 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+			);
+		};
 		C7C19CF1308C7E7700560DF0 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			files = (
@@ -107,6 +181,11 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		A10000000000000000000003 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
 		C7C19CEF308C7E7700560DF0 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			files = (
@@ -114,7 +193,53 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		A10000000000000000000007 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = C7C19CF2308C7E7700560DF0 /* EMSYS */;
+			targetProxy = A10000000000000000000006 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		A1000000000000000000000A /* Debug configuration for PBXNativeTarget "EMSYSTests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				MACOSX_DEPLOYMENT_TARGET = 26.6;
+				PRODUCT_BUNDLE_IDENTIFIER = com.embarqueros.emsys.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/EMSYS.app/EMSYS";
+				"TEST_HOST[sdk=macosx*]" = "$(BUILT_PRODUCTS_DIR)/EMSYS.app/Contents/MacOS/EMSYS";
+			};
+			name = Debug;
+		};
+		A1000000000000000000000B /* Release configuration for PBXNativeTarget "EMSYSTests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				MACOSX_DEPLOYMENT_TARGET = 26.6;
+				PRODUCT_BUNDLE_IDENTIFIER = com.embarqueros.emsys.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/EMSYS.app/EMSYS";
+				"TEST_HOST[sdk=macosx*]" = "$(BUILT_PRODUCTS_DIR)/EMSYS.app/Contents/MacOS/EMSYS";
+			};
+			name = Release;
+		};
 		C7C19CFC308C7E7800560DF0 /* Debug configuration for PBXProject "EMSYS" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -236,20 +361,24 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = Configuration/macOS.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = J87PCBC7U8;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				"INFOPLIST_FILE[sdk=iphoneos*]" = "Configuration/iOS-Info.plist";
+				"INFOPLIST_FILE[sdk=iphonesimulator*]" = "Configuration/iOS-Info.plist";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
-				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
-				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = NO;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = NO;
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -281,20 +410,24 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = Configuration/macOS.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = J87PCBC7U8;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				"INFOPLIST_FILE[sdk=iphoneos*]" = "Configuration/iOS-Info.plist";
+				"INFOPLIST_FILE[sdk=iphonesimulator*]" = "Configuration/iOS-Info.plist";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
-				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
-				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = NO;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = NO;
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -324,6 +457,14 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		A10000000000000000000009 /* Build configuration list for PBXNativeTarget "EMSYSTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1000000000000000000000A /* Debug configuration for PBXNativeTarget "EMSYSTests" */,
+				A1000000000000000000000B /* Release configuration for PBXNativeTarget "EMSYSTests" */,
+			);
+			defaultConfigurationName = Release;
+		};
 		C7C19CEE308C7E7700560DF0 /* Build configuration list for PBXProject "EMSYS" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -341,6 +482,43 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		B20000000000000000000005 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk.git";
+			requirement = {
+				kind = exactVersion;
+				version = 13.1.1;
+			};
+		};
+		B30000000000000000000003 /* XCRemoteSwiftPackageReference "GRDB.swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/groue/GRDB.swift.git";
+			requirement = {
+				kind = exactVersion;
+				version = 7.11.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		B20000000000000000000002 /* FirebaseAuth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B20000000000000000000005 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAuth;
+		};
+		B20000000000000000000004 /* FirebaseFirestore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B20000000000000000000005 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFirestore;
+		};
+		B30000000000000000000002 /* GRDB */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B30000000000000000000003 /* XCRemoteSwiftPackageReference "GRDB.swift" */;
+			productName = GRDB;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = C7C19CEB308C7E7700560DF0 /* Project object */;
 	validationLevel = 1;

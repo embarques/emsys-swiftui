@@ -1,5 +1,32 @@
 # EMSYS — Native Mobile and Desktop Product Specification
 
+## Required Code Conventions
+
+Before writing or refactoring code, read and follow
+[docs/code-conventions.md](docs/code-conventions.md).
+
+Use purpose-based names, focused responsibilities, and readable, idiomatic Swift.
+Do not name production types after milestones, implementation phases, or prototypes.
+Review changed code against these conventions and run the relevant validation
+before reporting completion. These rules apply to new code and modifications to
+existing code.
+
+## Required Verification Gate
+
+After every code or dependency change, run `./scripts/verify.sh` before moving to
+another feature or reporting the increment complete. This checks pinned package
+resolution in the normal Xcode workspace, macOS/iPhone/iPad tests and Release
+builds. Do not substitute a separate temporary DerivedData build as proof that the
+owner's Xcode workspace works. Fix failed resolution, compilation or tests first.
+
+Add regression coverage for changed behavior and recovery paths. When changing
+visible behavior, perform the relevant native UI check where access is available;
+record any unavailable live-account/device check explicitly. A passing unit suite
+does not prove signed login, actual printing or untested UI flows. Verify the open
+Xcode project builds after dependency/project changes and before advancing.
+Do not alter signing, bundle identifiers or saved project configuration to make
+checks pass without the owner's approval. See [Verification](docs/verification.md).
+
 ## 1. Purpose
 
 EMSYS is a business management platform with existing web and backend applications.
