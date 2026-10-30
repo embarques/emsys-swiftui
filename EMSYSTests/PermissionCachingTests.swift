@@ -54,6 +54,22 @@ final class PermissionCachingTests: XCTestCase {
         }
     }
 
+    func testForeignOrInactiveRefreshedIdentityCannotReplaceAuthorizedContext() async throws {
+        var inactive = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(snapshot())) as? [String: Any])
+        var profile = try XCTUnwrap(inactive["user"] as? [String: Any])
+        profile["active"] = false
+        inactive["user"] = profile
+        let inactiveSnapshot = try JSONDecoder().decode(AuthorizedSessionSnapshot.self,
+            from: JSONSerialization.data(withJSONObject: inactive))
+        for foreign in [snapshot(userID: "other"), snapshot(companyID: "other"), inactiveSnapshot] {
+            do {
+                _ = try await AuthorizedSessionLoader.load(userID: "driver", companyID: "company",
+                    refreshPermissions: true, cached: { self.snapshot() }, refreshed: { foreign })
+                XCTFail("Invalid refreshed scope must not grant access")
+            } catch AuthenticationIssue.authorization { }
+        }
+    }
+
     func testRefreshErrorsDoNotClaimSuccessOrFallBackToOldGrants() async throws {
         let failures: [Error] = [URLError(.notConnectedToInternet), APIClientError.httpStatus(403)]
         for error in failures {
