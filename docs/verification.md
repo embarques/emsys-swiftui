@@ -46,6 +46,14 @@ Add tests for each changed behavior and its relevant failure path. Never remove
 or weaken checks to make a failure disappear. A new migration must preserve the
 existing database; do not erase user storage or silently drop pending work.
 
+Invoice creation recovery also covers decoded server acknowledgements with an
+invalid invoice identity or an identity that differs from the confirmed initial
+payment. These submissions move to the existing review state without blocking
+unrelated creations. Reopening SQLite and explicitly retrying preserves the
+original request bytes and payment receipt; a confirmed payment is not posted
+again. Transport failures still leave work pending for retry. This is fixture
+coverage of the native recovery path, not live server idempotency acceptance.
+
 ## Native Xcode and UI acceptance
 
 After dependency/project changes, build the actual open EMSYS.xcodeproj in Xcode
