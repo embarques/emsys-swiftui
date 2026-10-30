@@ -87,6 +87,65 @@ final class InvoiceCreationOutboxTests: XCTestCase {
         XCTAssertEqual(completed?.state, .completed)
     }
 
+    func testInvalidInvoiceIdentityRequiresReviewAndPreservesRequestAcrossReopen() async throws {
+        let directory = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try await open(directory)
+        let operation = try await store.queueInvoiceCreation(draftID: UUID(), expectedRevision: nil, plan: makePlan())
+        let invalid = Data(String(decoding: invoiceResponse, as: UTF8.self)
+            .replacingOccurrences(of: "000000000000000000000003", with: "invalid-id").utf8)
+        let (client, session) = try makeClient([.success(invalid)])
+        defer { session.invalidateAndCancel() }
+        do { try await InvoiceCreationUploader(client: client, store: store).synchronize(); XCTFail("Invalid acknowledgement") }
+        catch InvoiceCreationUploader.UploadError.attentionRequired { }
+        let reopened = try await open(directory)
+        let blocked = try await reopened.invoiceCreation(draftID: operation.draftID)
+        XCTAssertEqual(blocked?.state, .needsReview)
+        XCTAssertEqual(blocked?.invoiceRequest, operation.invoiceRequest)
+        do { try await InvoiceCreationUploader(client: client, store: reopened).synchronize(); XCTFail("Review remains pending") }
+        catch InvoiceCreationUploader.UploadError.attentionRequired { }
+        XCTAssertEqual(CreationProtocol.paths.count, 1)
+        try await reopened.setInvoiceCreationState(id: operation.id, state: .pending)
+        CreationProtocol.responses = [.success(invoiceResponse)]
+        try await InvoiceCreationUploader(client: client, store: reopened).synchronize()
+        XCTAssertEqual(CreationProtocol.bodies, [try XCTUnwrap(operation.invoiceRequest), try XCTUnwrap(operation.invoiceRequest)])
+        let completed = try await reopened.invoiceCreation(draftID: operation.draftID)
+        XCTAssertEqual(completed?.state, .completed)
+    }
+
+    func testMismatchedPaidInvoiceDoesNotBlockOtherWorkOrRepostConfirmedPayment() async throws {
+        let directory = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try await open(directory)
+        let paid = try await store.queueInvoiceCreation(draftID: UUID(), expectedRevision: nil, plan: makePlan(payment: "5"))
+        let other = try await store.queueInvoiceCreation(draftID: UUID(), expectedRevision: nil, plan: makePlan())
+        let otherResponse = Data(String(decoding: invoiceResponse, as: UTF8.self)
+            .replacingOccurrences(of: "000000000000000000000003", with: "000000000000000000000004")
+            .replacingOccurrences(of: "INV-TEST-1", with: "INV-TEST-2").utf8)
+        let (client, session) = try makeClient([.success(receiptResponse), .success(otherResponse), .success(otherResponse)])
+        defer { session.invalidateAndCancel() }
+        do { try await InvoiceCreationUploader(client: client, store: store).synchronize(); XCTFail("Mismatched acknowledgement") }
+        catch InvoiceCreationUploader.UploadError.attentionRequired { }
+        let reopened = try await open(directory)
+        let blocked = try await reopened.invoiceCreation(draftID: paid.draftID)
+        XCTAssertEqual(blocked?.state, .needsReview)
+        XCTAssertEqual(blocked?.journalRequest, paid.journalRequest)
+        let frozenInvoice = try XCTUnwrap(blocked?.invoiceRequest)
+        let otherCompleted = try await reopened.invoiceCreation(draftID: other.draftID)
+        XCTAssertEqual(otherCompleted?.state, .completed)
+        let absent = try await reopened.invoice(id: "000000000000000000000003")
+        XCTAssertNil(absent)
+        CreationProtocol.responses = [.success(invoiceResponse)]
+        try await reopened.setInvoiceCreationState(id: paid.id, state: .pending)
+        try await InvoiceCreationUploader(client: client, store: reopened).synchronize()
+        XCTAssertEqual(CreationProtocol.paths, ["/v1/journals/sync", "/v1/invoices/sync/create",
+            "/v1/invoices/sync/create", "/v1/invoices/sync/create"])
+        XCTAssertEqual(CreationProtocol.bodies[1], frozenInvoice)
+        XCTAssertEqual(CreationProtocol.bodies[3], frozenInvoice)
+        let completed = try await reopened.invoiceCreation(draftID: paid.draftID)
+        XCTAssertEqual(completed?.state, .completed)
+    }
+
     func testMissingRouteKeepsWorkForExplicitRetryAndNeverFallsBack() async throws {
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }

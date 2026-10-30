@@ -38,7 +38,10 @@ struct InvoiceCreationUploader {
                     // posting must never serve as an unsafe fallback.
                     try await store.setInvoiceCreationState(id: operation.id, state: .serverUnavailable)
                     needsAttention = true
-                } catch InvoiceCreationPlan.PlanError.invalidReceipt {
+                } catch InvoiceCreationPlan.PlanError.invalidReceipt, InvoiceStore.StoreError.invalidCreationReceipt {
+                    // A decoded but inconsistent acknowledgement needs explicit
+                    // review. Keep frozen bytes and any confirmed payment, and
+                    // allow unrelated queued invoices to continue uploading.
                     try await store.setInvoiceCreationState(id: operation.id, state: .needsReview)
                     needsAttention = true
                 }

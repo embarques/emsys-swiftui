@@ -8,6 +8,7 @@ actor InvoiceStore {
     enum StoreError: Error {
         case invalidScope
         case invalidInvoiceID
+        case invalidCreationReceipt
         case invalidPage
         case invalidPageContents
         case missingEditSnapshot
@@ -982,7 +983,9 @@ extension InvoiceStore {
     }
 
     func completeInvoiceCreation(id: UUID, invoice: Invoice) throws {
-        guard Self.isObjectID(invoice.id), invoice.number?.isEmpty == false else { throw StoreError.invalidInvoiceID }
+        guard Self.isObjectID(invoice.id), invoice.number?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
+            throw StoreError.invalidCreationReceipt
+        }
         let payload = try JSONEncoder().encode(invoice)
         try database.write { database in
             guard let row = try Row.fetchOne(database, sql: "SELECT * FROM invoiceCreations WHERE id = ?", arguments: [id.uuidString]) else { throw StoreError.invalidDraft }
@@ -991,7 +994,9 @@ extension InvoiceStore {
             guard operation.state == .pending, operation.invoiceRequest != nil else { throw StoreError.invalidDraft }
             if let receiptData: Data = row["journalReceipt"] {
                 let receipt = try JSONDecoder().decode(InvoiceInitialPaymentReceipt.self, from: receiptData)
-                guard receipt.invoice.id == invoice.id, receipt.invoice.number == invoice.number else { throw StoreError.invalidDraft }
+                guard receipt.invoice.id == invoice.id, receipt.invoice.number == invoice.number else {
+                    throw StoreError.invalidCreationReceipt
+                }
             }
             try Self.advanceLocalVersion(in: database)
             try database.execute(sql: """
