@@ -54,6 +54,17 @@ original request bytes and payment receipt; a confirmed payment is not posted
 again. Transport failures still leave work pending for retry. This is fixture
 coverage of the native recovery path, not live server idempotency acceptance.
 
+Pickup invoice models retain the access scope under which they were opened.
+Refreshing company-wide creation down to assigned-pickup creation makes an open
+unrestricted draft list/editor unavailable; it cannot save or delete drafts under
+the narrower grant. Saved work remains intact in SQLite. An assigned-only screen
+stays restricted after a grant upgrade. Tests exercise these transitions with real
+local draft models and reopening persistence, plus rejection of foreign-user,
+foreign-company, and inactive refreshed authorization snapshots. Permission
+restoration still uses the established device copy; no per-screen permission
+fetch or additional API authorization rule is introduced. Live permission refresh
+and the resulting native lock presentation require signed-account acceptance.
+
 ## Native Xcode and UI acceptance
 
 After dependency/project changes, build the actual open EMSYS.xcodeproj in Xcode
