@@ -6564,6 +6564,57 @@
           }
         }
       }
+    },
+    "invoiceWizard.item": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Item"
+          }
+        },
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Artículo"
+          }
+        }
+      }
+    },
+    "invoiceWizard.changeCustomer": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Change customer"
+          }
+        },
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cambiar cliente"
+          }
+        }
+      }
+    },
+    "invoiceWizard.changeAddress": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Change address"
+          }
+        },
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cambiar dirección"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

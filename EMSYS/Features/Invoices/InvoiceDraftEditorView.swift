@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct InvoiceDraftEditorView: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.dismiss) private var dismiss
     @Environment(NetworkConnection.self) private var connection
     @Environment(SynchronizationState.self) private var synchronization
@@ -97,7 +98,7 @@ struct InvoiceDraftEditorView: View {
                     }
                     ProgressView(value: Double(model.step.rawValue + 1), total: Double(InvoiceCreationStep.allCases.count))
                         .accessibilityLabel(Text(LocalizedStringKey(model.step.title)))
-                    if model.step != .payment {
+                    if model.step == .details {
                         Text("drafts.localHint").font(.caption).foregroundStyle(.secondary)
                     }
                     if let pickup = model.content.pickup {
@@ -130,6 +131,8 @@ struct InvoiceDraftEditorView: View {
             }
         }
         .formStyle(.grouped)
+        .frame(maxWidth: 840)
+        .frame(maxWidth: .infinity)
         .disabled(!model.isLoaded || model.isSaving)
     }
 
@@ -167,33 +170,24 @@ struct InvoiceDraftEditorView: View {
                     set: { model.content.date = InvoiceDate(date: $0, calendar: InvoiceDate.calendar) }
                 ), displayedComponents: .date)
                 .environment(\.timeZone, .gmt)
-                LabeledContent("invoiceCreation.number") { Text("invoiceCreation.automaticNumber") }
+                VStack(alignment: .leading, spacing: AppStyle.Spacing.small) {
+                    Label("invoiceCreation.number", systemImage: "doc.text")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                    Text("invoiceCreation.automaticNumber").font(.headline)
+                }
+                .padding(.vertical, 8)
         }
     }
 
     private var customerDetails: some View {
-        @Bindable var model = model
-        return Section("invoiceCreation.step.customers") {
-                if model.partiesAreLocked {
-                    LabeledContent("invoices.sender", value: model.content.senderName)
-                } else {
-                    TextField("invoices.sender", text: Binding(
-                        get: { model.content.senderName }, set: { model.setPartyName($0, role: .sender) }))
-                }
-                if model.canChooseCustomers {
-                    Button("customers.chooseSender") { customerSearch = model.customerSearch(role: .sender) }
-                }
-                customerAddress(model.content.senderCustomer, selection: $model.content.senderAddressID)
-                if model.partiesAreLocked {
-                    LabeledContent("invoices.receiver", value: model.content.receiverName)
-                } else {
-                    TextField("invoices.receiver", text: Binding(
-                        get: { model.content.receiverName }, set: { model.setPartyName($0, role: .receiver) }))
-                }
-                if model.canChooseCustomers {
-                    Button("customers.chooseReceiver") { customerSearch = model.customerSearch(role: .receiver) }
-                }
-                customerAddress(model.content.receiverCustomer, selection: $model.content.receiverAddressID)
+        Group {
+            InvoiceCustomerFields(model: model, role: .sender) {
+                customerSearch = model.customerSearch(role: .sender)
+            }
+            InvoiceCustomerFields(model: model, role: .receiver) {
+                customerSearch = model.customerSearch(role: .receiver)
+            }
+            Section {
                 if model.isLoadingCustomerDetails { ProgressView() }
                 if let issue = model.customerDetailsIssue { Text(LocalizedStringKey(issue)).foregroundStyle(.secondary) }
                 if model.content.senderWriteSnapshot != nil {
@@ -201,11 +195,14 @@ struct InvoiceDraftEditorView: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 if model.canChooseCustomers {
-                    Button("invoiceCreation.refreshCustomerDetails") {
+                    Button {
                         Task { await model.loadCustomerDetails(online: connection.status != .unavailable) }
+                    } label: {
+                        Label("invoiceCreation.refreshCustomerDetails", systemImage: "arrow.clockwise")
                     }
                     .disabled(model.isLoadingCustomerDetails)
                 }
+            }
         }
     }
 
@@ -213,25 +210,20 @@ struct InvoiceDraftEditorView: View {
         @Bindable var model = model
         return Group {
             ForEach($model.content.items) { $item in
-                Section {
-                    TextField("invoiceEdits.description", text: $item.name, axis: .vertical)
-                    if model.canChooseCatalogItems {
-                        Button { catalogSelection = CatalogSelection(id: item.id) } label: {
-                            Label("itemCatalog.choose", systemImage: "list.bullet.rectangle")
-                        }
-                    }
-                    TextField("invoices.quantity", text: $item.quantity)
-                    TextField("drafts.unitPrice", text: $item.unitPrice)
-                    TextField("drafts.labelCount", text: $item.labelCount)
-                    TextField("drafts.totalOverride", text: $item.total)
-                    Button("drafts.removeItem", role: .destructive) {
-                        model.removeItem(id: item.id)
-                    }
+                let itemID = item.id
+                InvoiceDraftItemFields(item: $item, canChooseCatalogItems: model.canChooseCatalogItems,
+                    choose: { catalogSelection = CatalogSelection(id: itemID) },
+                    remove: { model.removeItem(id: itemID) })
+                    .disabled(!model.isLoaded || model.isSaving)
+            }
+            Section {
+                Button { model.content.items.append(InvoiceDraft.Item()) } label: {
+                    Label("drafts.addItem", systemImage: "plus.circle.fill")
+                        .frame(maxWidth: .infinity, minHeight: 44)
                 }
+                .buttonStyle(.bordered)
                 .disabled(!model.isLoaded || model.isSaving)
             }
-            Button("drafts.addItem") { model.content.items.append(InvoiceDraft.Item()) }
-                .disabled(!model.isLoaded || model.isSaving)
             if let amounts = model.amounts {
                 Section {
                     LabeledContent("invoiceCreation.subtotal") {
@@ -368,7 +360,9 @@ struct InvoiceDraftEditorView: View {
 
     private var wizardFooter: some View {
         VStack(spacing: 12) {
-            HStack(spacing: 16) {
+            let layout = dynamicTypeSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(spacing: 12)) : AnyLayout(HStackLayout(spacing: 16))
+            layout {
                 if model.creation != nil {
                     Button("documents.close") { dismiss() }.frame(maxWidth: .infinity, minHeight: 44)
                 } else {
@@ -400,19 +394,6 @@ struct InvoiceDraftEditorView: View {
         .padding(.vertical, 12)
         .background(.bar)
         .disabled(!model.isAvailable || !model.isLoaded || model.isSaving || model.isLoadingPolicies)
-    }
-
-    @ViewBuilder
-    private func customerAddress(_ customer: InvoiceCustomer?, selection: Binding<String?>) -> some View {
-        if let customer {
-            Text(model.partiesAreLocked ? "invoiceCreation.assignedCustomerHint" : "customers.selectedHint").font(.caption).foregroundStyle(.secondary)
-            Picker("customers.address", selection: selection) {
-                Text("customers.chooseAddress").tag(nil as String?)
-                ForEach((customer.addresses ?? []).filter { $0.id != nil }) { address in
-                    Text(address.displayText).tag(address.id)
-                }
-            }
-        }
     }
 
     private var paymentContext: some View {
