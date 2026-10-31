@@ -6564,6 +6564,262 @@
           }
         }
       }
+    },
+    "invoiceDetail.noItems": {
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No hay artículos disponibles en esta factura."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No items available for this invoice."
+          }
+        }
+      }
+    },
+    "invoiceDetail.surcharge": {
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recargo"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Surcharge"
+          }
+        }
+      }
+    },
+    "invoiceDetail.unnamedItem": {
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Artículo"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Item"
+          }
+        }
+      }
+    },
+    "pickups.view": {
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vista de recogidas"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pickup view"
+          }
+        }
+      }
+    },
+    "pickups.list": {
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lista"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "List"
+          }
+        }
+      }
+    },
+    "pickups.map": {
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mapa"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Map"
+          }
+        }
+      }
+    },
+    "pickups.map.restore": {
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volver a mapa y lista"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Back to map and list"
+          }
+        }
+      }
+    },
+    "pickups.map.fit": {
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ver todas las ubicaciones"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show all locations"
+          }
+        }
+      }
+    },
+    "pickups.map.expand": {
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ampliar mapa"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Expand map"
+          }
+        }
+      }
+    },
+    "pickups.map.noCoordinates": {
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No hay ubicaciones disponibles en este mapa"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No locations available on this map"
+          }
+        }
+      }
+    },
+    "pickups.map.hint": {
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selecciona una dirección o un pin para ver la recogida."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select an address or a pin to view the pickup."
+          }
+        }
+      }
+    },
+    "pickups.map.missingLocations": {
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Algunas direcciones no tienen ubicación guardada. Puedes abrirlas en Mapas."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Some addresses have no saved location. You can open them in Maps."
+          }
+        }
+      }
+    },
+    "pickups.map.addresses": {
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Direcciones de recogida"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pickup addresses"
+          }
+        }
+      }
+    },
+    "pickups.map.noAddress": {
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sin dirección"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No address"
+          }
+        }
+      }
+    },
+    "pickups.map.locationUnavailable": {
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sin ubicación en el mapa"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No map location"
+          }
+        }
+      }
+    },
+    "pickups.map.details": {
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ver recogida"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "View pickup"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

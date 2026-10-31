@@ -15,6 +15,10 @@ nonisolated struct Pickup: Codable, Identifiable, Equatable, Sendable {
 
     struct Party: Codable, Equatable, Sendable {
         struct Address: Codable, Equatable, Sendable {
+            struct Location: Codable, Equatable, Sendable {
+                let type: String
+                let coordinates: [Double]
+            }
             let address1: String?
             let address2: String?
             let apartment: String?
@@ -23,6 +27,7 @@ nonisolated struct Pickup: Codable, Identifiable, Equatable, Sendable {
             let zipcode: String?
             let country: String?
             let isPrimary: Bool?
+            var location: Location? = nil
         }
         let id: String?
         let name: String?
@@ -34,8 +39,11 @@ nonisolated struct Pickup: Codable, Identifiable, Equatable, Sendable {
             let phone = phones?.first(where: { $0.isPrimary == true }) ?? phones?.first
             return phone?.displayNumber ?? phone?.number
         }
+        var selectedAddress: Address? {
+            address ?? addresses?.first(where: { $0.isPrimary == true }) ?? addresses?.first
+        }
         var displayAddress: String {
-            let selected = address ?? addresses?.first(where: { $0.isPrimary == true }) ?? addresses?.first
+            let selected = selectedAddress
             return [selected?.address1, selected?.address2, selected?.apartment, selected?.city,
                     selected?.state, selected?.zipcode, selected?.country]
                 .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
