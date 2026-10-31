@@ -148,3 +148,23 @@ and synchronization recovery suites. Native iPhone/iPad fixtures render the actu
 wizard in Spanish, light appearance and dark appearance with accessibility text,
 including payment methods and populated check fields. These fixtures do not prove
 live account payment posting, physical-device keyboard behavior or settlement.
+
+## Invoice wizard field layout
+
+The existing five-step creation wizard now uses customer cards and persistent
+field labels. Sender and receiver names, phone details, selected addresses,
+customer replacement and address selection retain their existing bindings and
+permissions. Pickup-bound parties remain locked. Item cards preserve description,
+catalog selection, quantity, unit price, label count, total override and removal.
+Numeric fields use appropriate native keyboards; fractional quantity entry remains
+available. Each item previews its own validated total, and the existing subtotal
+still validates the full item collection. Larger accessibility text stacks the
+numeric fields; wider windows use a bounded form width.
+
+Coverage includes item removal with stable identity and SQLite reopening with all
+remaining values preserved. Native iPhone/iPad fixtures render the actual customer
+and item steps with Spanish labels, long descriptions, selected addresses and dark
+appearance with accessibility text. Existing customer-selection, catalog, draft,
+permission, signature and sync recovery tests remain part of the full gate. Live
+account customer/catalog selection and physical-device keyboard use still need
+manual acceptance; fixture rendering does not establish those behaviors.
