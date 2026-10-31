@@ -65,6 +65,31 @@ restoration still uses the established device copy; no per-screen permission
 fetch or additional API authorization rule is introduced. Live permission refresh
 and the resulting native lock presentation require signed-account acceptance.
 
+## Pickup map
+
+The pickup Map tab uses the same authorized, filtered, paginated records as the
+List tab. It does not query company-wide records separately. The API's
+`sender.address.location` (or the same primary/first address used by the existing
+address label) supplies a GeoJSON Point with longitude before latitude. Optional
+location fields persist in the existing SQLite JSON; no schema migration is
+needed. Missing/invalid coordinates never produce a guessed pin or a pin at a
+different customer address. Those pickups remain in the address list with an
+Apple Maps link when an address exists. Load More remains explicit in both views.
+
+Compact layouts show map above addresses; wider layouts use adjacent columns.
+Expanded iPhone/iPad maps use a full-screen presentation with an address-list
+drawer and a restore control. macOS uses a resizable map presentation. Selection
+is shared with the list and survives expansion/collapse and tab changes; changing
+the filtered records removes stale selections. No device location permission or
+GPS tracking is requested. Downloaded addresses/coordinates work offline, but
+Apple's map tiles and external directions depend on platform/network availability.
+
+Regression checks cover GeoJSON ordering/ranges, absent locations, the chosen
+address, SQLite reopen, and filtering/selection. Native iPhone/iPad fixtures render
+the combined layout, full-screen presentation and return, plus dark appearance
+with accessibility text sizes. Live account data, real directions, and complete
+offline map-tile availability require separate device acceptance.
+
 ## Native Xcode and UI acceptance
 
 After dependency/project changes, build the actual open EMSYS.xcodeproj in Xcode
