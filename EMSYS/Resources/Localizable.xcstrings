@@ -6513,6 +6513,54 @@
           }
         }
       }
+    },
+    "invoiceDetail.noItems": {
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No hay artículos disponibles en esta factura."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No items available for this invoice."
+          }
+        }
+      }
+    },
+    "invoiceDetail.surcharge": {
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recargo"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Surcharge"
+          }
+        }
+      }
+    },
+    "invoiceDetail.unnamedItem": {
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Artículo"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Item"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

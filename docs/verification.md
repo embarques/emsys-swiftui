@@ -65,6 +65,22 @@ restoration still uses the established device copy; no per-screen permission
 fetch or additional API authorization rule is introduced. Live permission refresh
 and the resulting native lock presentation require signed-account acceptance.
 
+## Invoice detail layout
+
+The detail screen's read-only content shows invoice identity/date and known
+server status, sender/receiver contact information, separated item rows with
+trailing amounts, and financial values below the items. Cost, discount, surcharge,
+payment and balance are the API projection's values; the view does not calculate
+new totals, infer payment status from missing data, assume currency, or substitute
+zero for omitted amounts. Existing print/PDF, edit, pending-edit, refresh and More
+actions remain in the authenticated detail wrapper.
+
+Native iPhone/iPad fixture checks render long item descriptions, totals, sparse
+records, dark appearance and accessibility text sizes, with horizontal-overflow
+assertions. These checks exercise the presentation without live requests or
+production writes. Actual account data and physical printing remain separate
+acceptance checks.
+
 ## Native Xcode and UI acceptance
 
 After dependency/project changes, build the actual open EMSYS.xcodeproj in Xcode
