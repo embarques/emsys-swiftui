@@ -3,6 +3,44 @@ import XCTest
 
 @MainActor
 final class InvoiceDraftPaymentTests: XCTestCase {
+    func testPaymentMethodIdentitiesMatchTheAPICatalog() {
+        XCTAssertEqual(InvoiceDraftPayment.Method.cash.lookupID, 1)
+        XCTAssertEqual(InvoiceDraftPayment.Method.check.lookupID, 2)
+        XCTAssertEqual(InvoiceDraftPayment.Method.deposit.lookupID, 3)
+        XCTAssertEqual(InvoiceDraftPayment.Method.zelle.lookupID, 4)
+        XCTAssertEqual(InvoiceDraftPayment.Method.creditCard.lookupID, 5)
+    }
+
+    func testSelectingTheCurrentMethodPreservesDetailsAndChangingItClearsIncompatibleFields() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try await InvoiceStore.open(directory: directory, userID: "user", companyID: "company")
+        var authorized = true
+        let model = InvoiceDraftEditorModel(store: store, financialPermission: { _ in authorized }, isAuthorized: { true })
+        model.setPaymentMode(.record)
+        model.setPaymentMethod(.check)
+        model.content.payment?.amount = "12.50"
+        model.content.payment?.bankAccount = .init(id: 1, name: "Bank", displayName: nil, type: "BANK")
+        model.content.payment?.checkNumber = "CHECK-1"
+        model.content.payment?.description = "Initial payment"
+        let payment = model.content.payment
+        model.setPaymentMethod(.check)
+        XCTAssertEqual(model.content.payment, payment)
+        authorized = false
+        model.setPaymentMethod(.cash)
+        XCTAssertEqual(model.content.payment, payment)
+        authorized = true
+        model.setPaymentMethod(.cash)
+        XCTAssertNil(model.content.payment?.bankAccount)
+        XCTAssertEqual(model.content.payment?.checkNumber, "")
+        XCTAssertEqual(model.content.payment?.amount, "12.50")
+        XCTAssertEqual(model.content.payment?.description, "Initial payment")
+        model.setPaymentMode(.skip)
+        XCTAssertEqual(model.content.payment?.totals(subtotal: 20)?.balance, 20)
+        model.setPaymentMode(.record)
+        XCTAssertEqual(model.content.payment?.totals(subtotal: 20)?.balance, 7.5)
+    }
+
     func testSkipNeverCountsAnUnsubmittedPaymentAndAmountsCannotOverpay() {
         var payment = InvoiceDraftPayment(mode: .skip)
         payment.amount = "99"

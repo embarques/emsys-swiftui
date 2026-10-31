@@ -5,7 +5,7 @@ struct InvoicePaymentFields: View {
     @Bindable var model: InvoiceDraftEditorModel
 
     var body: some View {
-        Section("invoicePayment.title") {
+        Section {
             Picker("invoicePayment.mode", selection: Binding(
                 get: { model.content.payment?.mode },
                 set: { if let mode = $0 { model.setPaymentMode(mode) } }
@@ -13,19 +13,40 @@ struct InvoicePaymentFields: View {
                 Text("invoicePayment.chooseMode").tag(nil as InvoiceDraftPayment.Mode?)
                 Text("invoicePayment.skip").tag(Optional(InvoiceDraftPayment.Mode.skip))
                 if model.canRecordPayment || model.content.payment?.mode == .record {
-                    Text("invoicePayment.record").tag(Optional(InvoiceDraftPayment.Mode.record))
+                    Text("invoicePayment.recordShort").tag(Optional(InvoiceDraftPayment.Mode.record))
                 }
             }
+            if model.content.payment?.mode == .record {
+                amountEntry
+                    .disabled(!model.canRecordPayment)
+            }
+        }
+        if model.content.payment?.mode == .record {
+            Section("invoicePayment.method") {
+                ForEach(InvoiceDraftPayment.Method.allCases) { method in
+                    methodRow(method)
+                }
+            }
+            .disabled(!model.canRecordPayment || model.isSaving)
+            if model.content.payment?.method != nil {
+                Section("invoicePayment.details") {
+                    paymentDetails
+                }
+                .disabled(!model.canRecordPayment || model.isSaving)
+            }
+            if !model.canRecordPayment {
+                Section {
+                    Text("invoicePayment.permissionRequired").foregroundStyle(.secondary)
+                }
+            }
+        }
+        Section {
             if model.canApplyDiscount {
                 LabeledContent("invoicePayment.discount") {
                     moneyField("invoicePayment.discount", value: paymentBinding(\.discount, fallback: "0"))
                 }
             } else if let discount = model.content.payment?.discount, discount != "0" {
                 LabeledContent("invoicePayment.discount", value: discount)
-            }
-            if model.content.payment?.mode == .record {
-                paymentDetails.disabled(!model.canRecordPayment)
-                if !model.canRecordPayment { Text("invoicePayment.permissionRequired").foregroundStyle(.secondary) }
             }
             if let totals = model.paymentTotals {
                 LabeledContent("invoicePayment.plannedPayment") {
@@ -35,23 +56,56 @@ struct InvoicePaymentFields: View {
                     Text(totals.balance, format: .number.precision(.fractionLength(2))).bold().monospacedDigit()
                 }
             }
-            Text("invoicePayment.localHint").font(.caption).foregroundStyle(.secondary)
+        } footer: {
+            Text("invoicePayment.localHint")
         }
+    }
+
+    private var amountEntry: some View {
+        VStack(spacing: AppStyle.Spacing.small) {
+            Text("invoicePayment.amount").font(.subheadline).foregroundStyle(.secondary)
+            TextField("invoicePayment.amount", text: paymentBinding(\.amount, fallback: ""))
+                #if os(iOS)
+                .keyboardType(.decimalPad)
+                #endif
+                .multilineTextAlignment(.center)
+                .font(.largeTitle.bold())
+                .monospacedDigit()
+                .foregroundStyle(AppStyle.Colors.accent)
+                .accessibilityLabel(Text("invoicePayment.amount"))
+            Label("invoicePayment.editAmount", systemImage: "pencil")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, AppStyle.Spacing.large)
+    }
+
+    private func methodRow(_ method: InvoiceDraftPayment.Method) -> some View {
+        let selected = model.content.payment?.method == method
+        return Button {
+            model.setPaymentMethod(method)
+        } label: {
+            HStack(spacing: AppStyle.Spacing.medium) {
+                Image(systemName: method.symbol)
+                    .font(.title3)
+                    .foregroundStyle(AppStyle.Colors.accent)
+                    .frame(width: 28)
+                    .accessibilityHidden(true)
+                Text(LocalizedStringKey(method.title)).foregroundStyle(.primary)
+                Spacer(minLength: AppStyle.Spacing.small)
+                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(selected ? AppStyle.Colors.accent : .secondary)
+                    .accessibilityHidden(true)
+            }
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? [.isSelected] : [])
     }
 
     @ViewBuilder
     private var paymentDetails: some View {
-        LabeledContent("invoicePayment.amount") {
-            moneyField("invoicePayment.amount", value: paymentBinding(\.amount, fallback: ""))
-        }
-        Picker("invoicePayment.method", selection: Binding(
-            get: { model.content.payment?.method }, set: { model.setPaymentMethod($0) }
-        )) {
-            Text("invoicePayment.methodRequired").tag(nil as InvoiceDraftPayment.Method?)
-            ForEach(InvoiceDraftPayment.Method.allCases) { method in
-                Text(LocalizedStringKey(method.title)).tag(Optional(method))
-            }
-        }
         if model.content.payment?.method?.requiresBankAccount == true {
             if model.canChooseBankAccount {
                 Picker("invoicePayment.bank", selection: Binding(
@@ -64,8 +118,10 @@ struct InvoicePaymentFields: View {
                     }
                     ForEach(model.bankAccounts) { account in Text(account.title).tag(Optional(account.id)) }
                 }
-                Button("invoices.refresh") {
+                Button {
                     Task { await model.loadBankAccounts(online: connection.status != .unavailable) }
+                } label: {
+                    Label("invoices.refresh", systemImage: "arrow.clockwise")
                 }
                 .disabled(model.isLoadingBankAccounts)
             } else if let account = model.content.payment?.bankAccount {
@@ -75,11 +131,20 @@ struct InvoicePaymentFields: View {
             if let issue = model.bankAccountIssue { Text(LocalizedStringKey(issue)).foregroundStyle(.secondary) }
         }
         if model.content.payment?.method == .check {
-            TextField("invoicePayment.checkNumber", text: paymentBinding(\.checkNumber, fallback: ""))
+            referenceField("invoicePayment.checkNumber", value: paymentBinding(\.checkNumber, fallback: ""))
         } else {
-            TextField("invoicePayment.externalReference", text: paymentBinding(\.externalReference, fallback: ""))
+            referenceField("invoicePayment.externalReference", value: paymentBinding(\.externalReference, fallback: ""))
         }
-        TextField("invoicePayment.description", text: paymentBinding(\.description, fallback: ""), axis: .vertical)
+        referenceField("invoicePayment.description", value: paymentBinding(\.description, fallback: ""))
+    }
+
+    private func referenceField(_ title: LocalizedStringKey, value: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: AppStyle.Spacing.small) {
+            Text(title).font(.subheadline).foregroundStyle(.secondary)
+            TextField(title, text: value, axis: .vertical)
+                .accessibilityLabel(Text(title))
+        }
+        .padding(.vertical, 4)
     }
 
     private func paymentBinding(_ path: WritableKeyPath<InvoiceDraftPayment, String>, fallback: String) -> Binding<String> {

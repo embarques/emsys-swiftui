@@ -97,7 +97,9 @@ struct InvoiceDraftEditorView: View {
                     }
                     ProgressView(value: Double(model.step.rawValue + 1), total: Double(InvoiceCreationStep.allCases.count))
                         .accessibilityLabel(Text(LocalizedStringKey(model.step.title)))
-                    Text("drafts.localHint").font(.caption).foregroundStyle(.secondary)
+                    if model.step != .payment {
+                        Text("drafts.localHint").font(.caption).foregroundStyle(.secondary)
+                    }
                     if let pickup = model.content.pickup {
                         LabeledContent("pickups.invoiceAssociation", value: "#\(pickup.id)").font(.subheadline)
                     }
@@ -120,7 +122,7 @@ struct InvoiceDraftEditorView: View {
             case .details: invoiceDetails
             case .customers: customerDetails
             case .items: invoiceItems
-            case .payment: paymentContext; InvoicePaymentFields(model: model)
+            case .payment: InvoicePaymentFields(model: model); paymentContext
             case .review: reviewSummary; attachmentSection; policyReview; signatureReview
             }
             if !model.isLoaded && !model.isLoading {
