@@ -7,7 +7,16 @@ nonisolated struct InvoiceDraftPayment: Codable, Equatable, Sendable {
         case cash = "CASH", deposit = "DEPOSIT", check = "CHECK", zelle = "ZELLE", creditCard = "CREDIT-CARD"
         var id: Self { self }
         var lookupID: UInt16 {
-            switch self { case .cash: 1; case .deposit: 2; case .check: 3; case .zelle: 4; case .creditCard: 5 }
+            switch self { case .cash: 1; case .deposit: 3; case .check: 2; case .zelle: 4; case .creditCard: 5 }
+        }
+        var symbol: String {
+            switch self {
+            case .cash: "banknote"
+            case .deposit: "building.columns"
+            case .check: "doc.text"
+            case .zelle: "arrow.left.arrow.right"
+            case .creditCard: "creditcard"
+            }
         }
         var title: String { "invoicePayment.method.\(rawValue)" }
         var requiresBankAccount: Bool { self != .cash }

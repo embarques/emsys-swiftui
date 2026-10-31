@@ -226,7 +226,7 @@ final class InvoiceDraftEditorModel: Identifiable {
     }
 
     func setPaymentMethod(_ method: InvoiceDraftPayment.Method?) {
-        guard canRecordPayment, !isSaving else { return }
+        guard canRecordPayment, !isSaving, content.payment?.method != method else { return }
         content.payment?.method = method
         content.payment?.bankAccount = nil
         content.payment?.checkNumber = ""

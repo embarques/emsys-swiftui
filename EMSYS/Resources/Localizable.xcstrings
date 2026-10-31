@@ -2304,13 +2304,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Payment and Cuadre"
+            "value": "Payment"
           }
         },
         "es-DO": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pago y Cuadre"
+            "value": "Pago"
           }
         }
       }
@@ -6510,6 +6510,57 @@
           "stringUnit": {
             "state": "translated",
             "value": "Discard rejected completion and use the current server pickup?"
+          }
+        }
+      }
+    },
+    "invoicePayment.details": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Payment details"
+          }
+        },
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detalles del pago"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "invoicePayment.editAmount": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap the amount to edit"
+          }
+        },
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toca el importe para editar"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "invoicePayment.recordShort": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Record payment"
+          }
+        },
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Registrar pago"
           }
         }
       }

@@ -90,3 +90,20 @@ project's saved signing settings and no CODE_SIGNING_ALLOWED override. Check the
 resulting signature/entitlements before installing. Do not change the owner's
 team, bundle ID, Firebase client, or saved signing configuration to do this.
 Unsigned physical-SDK compilation does not establish device provisioning.
+
+## Invoice initial payment layout
+
+The creation wizard presents an editable payment amount, native method-selection
+rows, conditional bank/check/reference fields and the calculated planned payment
+and balance. Payment recording and discount permissions remain separate. Selecting
+the current method preserves entered details; changing methods clears incompatible
+bank/check/reference values while retaining the amount and description. The API
+catalog defines CHECK as ID 2 and DEPOSIT as ID 3; new creation plans use those
+identities. Previously frozen outbox request bytes are not rewritten.
+
+Regression coverage includes method identities, repeated selection, permission
+revocation, method changes, skip/record transitions, and existing SQLite reopening
+and synchronization recovery suites. Native iPhone/iPad fixtures render the actual
+wizard in Spanish, light appearance and dark appearance with accessibility text,
+including payment methods and populated check fields. These fixtures do not prove
+live account payment posting, physical-device keyboard behavior or settlement.
