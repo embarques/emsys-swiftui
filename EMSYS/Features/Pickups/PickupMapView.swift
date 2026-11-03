@@ -1,4 +1,3 @@
-import MapKit
 import SwiftUI
 
 struct PickupMapView<Detail: View>: View {
@@ -7,7 +6,7 @@ struct PickupMapView<Detail: View>: View {
     let hasMore: Bool
     let loadMore: () -> Void
     let detail: (Pickup) -> Detail
-    @State private var camera: MapCameraPosition = .automatic
+    @State private var fitRequest = 0
 
     init(model: PickupMapModel, isLoading: Bool = false, hasMore: Bool = false,
          loadMore: @escaping () -> Void = {}, @ViewBuilder detail: @escaping (Pickup) -> Detail) {
@@ -22,8 +21,7 @@ struct PickupMapView<Detail: View>: View {
         GeometryReader { geometry in
             if model.isExpanded {
                 // The full-screen presentation owns the live map and address
-                // list. Keeping hidden copies mounted lets both MapKit views
-                // write the camera binding during the same pin selection.
+                // list; the compact map is restored after dismissal.
                 AppStyle.Colors.surface
             } else if geometry.size.width >= 700 {
                 HStack(spacing: 0) {
@@ -38,9 +36,6 @@ struct PickupMapView<Detail: View>: View {
                 }
             }
         }
-        .onAppear { focusSelection() }
-        .onChange(of: model.pickups) { focusSelection() }
-        .onChange(of: model.selectedPickupID) { focusSelection() }
         #if os(iOS)
         .fullScreenCover(isPresented: $model.isExpanded) { expandedMap }
         #else
@@ -82,16 +77,8 @@ struct PickupMapView<Detail: View>: View {
     }
 
     private func mapCanvas(expanded: Bool) -> some View {
-        Map(position: $camera, selection: $model.selectedPickupID) {
-            ForEach(model.mappedPickups) { pickup in
-                if let coordinate = PickupMapModel.coordinate(for: pickup) {
-                    Marker(pickup.sender?.name ?? "#\(pickup.id)", coordinate: coordinate)
-                        .tint(AppStyle.Colors.accent)
-                        .tag(pickup.id)
-                }
-            }
-        }
-        .mapControls { MapCompass(); MapScaleView() }
+        PickupMapCanvas(pickups: model.mappedPickups,
+            selectedPickupID: $model.selectedPickupID, fitRequest: fitRequest)
         .overlay(alignment: .bottomLeading) {
             if expanded {
                 Button { model.showsExpandedList = true } label: {
@@ -106,7 +93,7 @@ struct PickupMapView<Detail: View>: View {
         }
         .overlay(alignment: .topLeading) {
             HStack {
-                Button { model.selectedPickupID = nil; camera = .automatic } label: {
+                Button { model.selectedPickupID = nil; fitRequest += 1 } label: {
                     Label("pickups.map.fit", systemImage: "scope")
                 }
                 if !expanded {
@@ -203,10 +190,4 @@ struct PickupMapView<Detail: View>: View {
         .listRowBackground(selected ? AppStyle.Colors.accent.opacity(0.10) : Color.clear)
     }
 
-    private func focusSelection() {
-        if let pickup = model.pickups.first(where: { $0.id == model.selectedPickupID }),
-           let coordinate = PickupMapModel.coordinate(for: pickup) {
-            camera = .region(MKCoordinateRegion(center: coordinate, latitudinalMeters: 1800, longitudinalMeters: 1800))
-        } else { camera = .automatic }
-    }
 }
