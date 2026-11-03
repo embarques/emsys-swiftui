@@ -32,6 +32,7 @@ struct AppMoreView: View {
                     }
                 }
             }
+            APIConnectionSection()
             Section("navigation.account") {
                 if let name = session.user?.name, !name.isEmpty { Text(verbatim: name).font(.headline) }
                 if let email = session.user?.email, !email.isEmpty { Text(verbatim: email).foregroundStyle(.secondary) }
