@@ -20,7 +20,12 @@ struct PickupMapView<Detail: View>: View {
 
     var body: some View {
         GeometryReader { geometry in
-            if geometry.size.width >= 700 {
+            if model.isExpanded {
+                // The full-screen presentation owns the live map and address
+                // list. Keeping hidden copies mounted lets both MapKit views
+                // write the camera binding during the same pin selection.
+                AppStyle.Colors.surface
+            } else if geometry.size.width >= 700 {
                 HStack(spacing: 0) {
                     mapCanvas(expanded: false)
                     addressList.frame(width: min(380, geometry.size.width * 0.42))

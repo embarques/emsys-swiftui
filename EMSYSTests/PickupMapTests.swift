@@ -2,6 +2,7 @@ import XCTest
 #if os(iOS)
 import SwiftUI
 import UIKit
+import MapKit
 #endif
 @testable import EMSYS
 
@@ -65,7 +66,8 @@ final class PickupMapTests: XCTestCase {
     #if os(iOS)
     func testNativeMapAndAddressListRenderInSpanish() async throws {
         let pickups = [try fixture(id: 1, coordinates: [-73.94, 40.84]),
-                       try fixture(id: 2, coordinates: nil)]
+                       try fixture(id: 2, coordinates: nil),
+                       try fixture(id: 3, coordinates: [-73.98, 40.75])]
         let model = PickupMapModel(pickups: pickups)
         model.selectedPickupID = 1
         let host = UIHostingController(rootView: NavigationStack {
@@ -90,7 +92,27 @@ final class PickupMapTests: XCTestCase {
         try XCTUnwrap(image.pngData()).write(to: FileManager.default.temporaryDirectory.appending(path: "emsys-pickup-map-\(device).png"))
         model.isExpanded = true
         try await Task.sleep(for: .milliseconds(700))
-        XCTAssertNotNil(host.presentedViewController)
+        let presentation = try XCTUnwrap(host.presentedViewController)
+        XCTAssertNil(findMap(in: host.view), "The compact map must be unmounted while the full-screen map owns selection")
+        let map = try XCTUnwrap(findMap(in: presentation.view))
+        let annotation = try XCTUnwrap(map.annotations.first {
+            abs($0.coordinate.longitude - (-73.98)) < 0.00001
+        })
+        map.selectAnnotation(annotation, animated: false)
+        let selectionDeadline = ContinuousClock.now.advanced(by: .seconds(3))
+        while model.selectedPickupID != 3, ContinuousClock.now < selectionDeadline {
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        XCTAssertEqual(model.selectedPickupID, 3)
+        // MapKit writes the same binding as a user's pin tap. Re-selecting pins
+        // must not prevent the list drawer and restore controls from working.
+        if let firstAnnotation = map.annotations.first(where: {
+            abs($0.coordinate.longitude - (-73.94)) < 0.00001
+        }) {
+            map.selectAnnotation(firstAnnotation, animated: false)
+            try await Task.sleep(for: .milliseconds(300))
+            XCTAssertEqual(model.selectedPickupID, 1)
+        } else { XCTFail("Expected the first pickup pin") }
         let expanded = UIGraphicsImageRenderer(bounds: window.bounds).image { _ in
             window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
         }
@@ -111,6 +133,7 @@ final class PickupMapTests: XCTestCase {
             try await Task.sleep(for: .milliseconds(50))
         }
         XCTAssertNil(host.presentedViewController)
+        XCTAssertNotNil(findMap(in: host.view), "The compact map must be restored after dismissing full-screen mode")
         XCTAssertEqual(model.selectedPickupID, 1)
         window.overrideUserInterfaceStyle = .dark
         host.traitOverrides.preferredContentSizeCategory = .accessibilityLarge
@@ -119,6 +142,10 @@ final class PickupMapTests: XCTestCase {
             window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
         }
         try XCTUnwrap(dark.pngData()).write(to: FileManager.default.temporaryDirectory.appending(path: "emsys-pickup-map-dark-\(device).png"))
+    }
+    private func findMap(in view: UIView) -> MKMapView? {
+        if let map = view as? MKMapView { return map }
+        return view.subviews.lazy.compactMap { self.findMap(in: $0) }.first
     }
     #endif
 
