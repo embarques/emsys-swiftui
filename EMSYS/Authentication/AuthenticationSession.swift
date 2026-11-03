@@ -139,8 +139,7 @@ final class AuthenticationSession {
     // The existing portal's configured API root. No browser proxy is needed by
     // native clients. A separate environment can supply EMSYSAPIBaseURL in Info.
     private var apiBaseURL: URL? {
-        URL(string: Bundle.main.object(forInfoDictionaryKey: "EMSYSAPIBaseURL") as? String
-            ?? APIConfiguration.defaultRoot)
+        APIConfiguration.baseURL
     }
 
     func start() {

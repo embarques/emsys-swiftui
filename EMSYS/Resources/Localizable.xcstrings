@@ -23,6 +23,261 @@
       }
     },
     "EMSYS": {},
+    "apiHealth.checkedAt": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Última prueba"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last checked"
+          }
+        }
+      }
+    },
+    "apiHealth.explanation": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comprueba la disponibilidad del servidor. No verifica tu sesión ni sincroniza facturas, pagos u otros datos."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checks server availability. Does not verify your session or synchronize invoices, payments or other data."
+          }
+        }
+      }
+    },
+    "apiHealth.httpStatus": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Respuesta HTTP"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HTTP response"
+          }
+        }
+      }
+    },
+    "apiHealth.server": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Servidor"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server"
+          }
+        }
+      }
+    },
+    "apiHealth.status.checking": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comprobando conexión…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checking connection…"
+          }
+        }
+      }
+    },
+    "apiHealth.status.healthy": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "API disponible"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "API available"
+          }
+        }
+      }
+    },
+    "apiHealth.status.idle": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conexión sin comprobar"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connection not checked"
+          }
+        }
+      }
+    },
+    "apiHealth.status.invalidConfiguration": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La dirección del servidor no es válida"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The server address is invalid"
+          }
+        }
+      }
+    },
+    "apiHealth.status.serverError": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El servidor devolvió un error"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The server returned an error"
+          }
+        }
+      }
+    },
+    "apiHealth.status.timedOut": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El servidor no respondió a tiempo"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The server did not respond in time"
+          }
+        }
+      }
+    },
+    "apiHealth.status.unexpectedResponse": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La respuesta del servidor no es válida"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The server response is invalid"
+          }
+        }
+      }
+    },
+    "apiHealth.status.unhealthy": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El servidor reporta un problema"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The server reports a problem"
+          }
+        }
+      }
+    },
+    "apiHealth.status.unreachable": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo conectar con el servidor"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not connect to the server"
+          }
+        }
+      }
+    },
+    "apiHealth.test": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Probar conexión"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Test connection"
+          }
+        }
+      }
+    },
+    "apiHealth.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conexión con la API"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "API connection"
+          }
+        }
+      }
+    },
     "appearance.dark": {
       "extractionState": "manual",
       "localizations": {
