@@ -5493,6 +5493,23 @@
         }
       }
     },
+    "signature.signHere": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Firma aquí"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign here"
+          }
+        }
+      }
+    },
     "signature.instructions": {
       "extractionState": "manual",
       "localizations": {
