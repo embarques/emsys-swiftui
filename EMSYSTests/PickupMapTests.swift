@@ -65,11 +65,11 @@ final class PickupMapTests: XCTestCase {
 
     #if os(iOS)
     func testNativeMapAndAddressListRenderInSpanish() async throws {
+        let overlapping = try (4...30).map { try fixture(id: UInt32($0), coordinates: [-73.90, 40.88]) }
         let pickups = [try fixture(id: 1, coordinates: [-73.94, 40.84]),
                        try fixture(id: 2, coordinates: nil),
-                       try fixture(id: 3, coordinates: [-73.98, 40.75])]
+                       try fixture(id: 3, coordinates: [-73.98, 40.75])] + overlapping
         let model = PickupMapModel(pickups: pickups)
-        model.selectedPickupID = 1
         let host = UIHostingController(rootView: NavigationStack {
             PickupMapView(model: model) { Text(verbatim: "#\($0.id)") }
                 .navigationTitle("navigation.pickups")
@@ -96,7 +96,7 @@ final class PickupMapTests: XCTestCase {
         XCTAssertNil(findMap(in: host.view), "The compact map must be unmounted while the full-screen map owns selection")
         let map = try XCTUnwrap(findMap(in: presentation.view))
         let annotation = try XCTUnwrap(map.annotations.first {
-            abs($0.coordinate.longitude - (-73.98)) < 0.00001
+            ($0 as? PickupMapAnnotation)?.id == 3
         })
         map.selectAnnotation(annotation, animated: false)
         let selectionDeadline = ContinuousClock.now.advanced(by: .seconds(3))
@@ -104,10 +104,19 @@ final class PickupMapTests: XCTestCase {
             try await Task.sleep(for: .milliseconds(50))
         }
         XCTAssertEqual(model.selectedPickupID, 3)
-        // MapKit writes the same binding as a user's pin tap. Re-selecting pins
-        // must not prevent the list drawer and restore controls from working.
+        // Exercise overlapping locations and repeated taps, including selection
+        // callbacks that must settle before reopening the list or closing the map.
+        for id: UInt32 in [4, 5, 6, 3] {
+            let pin = try XCTUnwrap(map.annotations.first { ($0 as? PickupMapAnnotation)?.id == id })
+            map.selectAnnotation(pin, animated: false)
+            let deadline = ContinuousClock.now.advanced(by: .seconds(3))
+            while model.selectedPickupID != id, ContinuousClock.now < deadline {
+                try await Task.sleep(for: .milliseconds(50))
+            }
+            XCTAssertEqual(model.selectedPickupID, id)
+        }
         if let firstAnnotation = map.annotations.first(where: {
-            abs($0.coordinate.longitude - (-73.94)) < 0.00001
+            ($0 as? PickupMapAnnotation)?.id == 1
         }) {
             map.selectAnnotation(firstAnnotation, animated: false)
             try await Task.sleep(for: .milliseconds(300))
