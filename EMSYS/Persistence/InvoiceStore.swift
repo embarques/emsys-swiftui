@@ -8,6 +8,8 @@ actor InvoiceStore {
     enum StoreError: Error {
         case invalidScope
         case invalidInvoiceID
+        case invoicePoolEmpty
+        case invoiceReservationChanged
         case invalidCreationReceipt
         case invalidPage
         case invalidPageContents
@@ -264,6 +266,15 @@ actor InvoiceStore {
             try database.alter(table: "invoiceCreations") { $0.add(column: "assignedOnly", .boolean).notNull().defaults(to: false) }
             try database.create(index: "assignedInvoiceDrafts", on: "invoiceDrafts", columns: ["assignedOnly", "savedAt", "id"])
             try database.create(index: "assignedInvoiceCreations", on: "invoiceCreations", columns: ["assignedOnly", "state", "createdAt"])
+        }
+        migrator.registerMigration("reserveOfflineInvoiceNumbers") { database in
+            try database.execute(sql: """
+                CREATE TABLE invoicePoolMetadata (id INTEGER PRIMARY KEY CHECK(id = 1), deviceID TEXT NOT NULL, lowThreshold INTEGER NOT NULL DEFAULT 10, revision INTEGER NOT NULL DEFAULT 0);
+                CREATE TABLE invoiceReservations (id TEXT PRIMARY KEY, token TEXT NOT NULL, state TEXT NOT NULL, payload BLOB NOT NULL);
+                CREATE INDEX invoiceReservations_state ON invoiceReservations(state, id);
+                CREATE TABLE invoiceReservationRetiredTokens (id TEXT NOT NULL, token TEXT NOT NULL, PRIMARY KEY(id, token));
+                CREATE TABLE invoicePoolActions (id TEXT PRIMARY KEY, payload BLOB NOT NULL, createdAt DOUBLE NOT NULL);
+                """)
         }
         try migrator.migrate(database)
         let savedEnvironment = try database.read { try String.fetchOne($0, sql: "SELECT apiEnvironment FROM invoiceCacheMetadata WHERE id = 1") }
@@ -901,13 +912,20 @@ extension InvoiceStore {
         try Self.validateDraft(plan.content)
         let encoder = JSONEncoder()
         let content = try encoder.encode(plan.content)
-        let frozen = try encoder.encode(plan)
-        guard content.count <= 3 * 1024 * 1024, frozen.count <= 3 * 1024 * 1024 else { throw StoreError.invalidDraft }
-        let journal = try plan.journalRequest()
-        let invoice = journal == nil ? try plan.invoiceRequest() : nil
+        guard content.count <= 3 * 1024 * 1024 else { throw StoreError.invalidDraft }
         let operationID = plan.invoiceRequestID
         let now = Date.now
         return try database.write { database in
+            guard let payload = try Data.fetchOne(database, sql: "SELECT payload FROM invoiceReservations WHERE state = 'available' ORDER BY id LIMIT 1") else { throw StoreError.invoicePoolEmpty }
+            let reservation = try JSONDecoder().decode(InvoiceReservation.self, from: payload)
+            let plan = try plan.reserving(reservation)
+            let frozen = try encoder.encode(plan)
+            guard frozen.count <= 3 * 1024 * 1024 else { throw StoreError.invalidDraft }
+            let journal = try plan.journalRequest()
+            let invoice = journal == nil ? try plan.invoiceRequest() : nil
+            try database.execute(sql: "UPDATE invoiceReservations SET state = 'consumed' WHERE id = ? AND token = ? AND state = 'available'", arguments: [reservation.id, reservation.allocation.token])
+            guard database.changesCount == 1 else { throw StoreError.invoiceReservationChanged }
+            try database.execute(sql: "UPDATE invoicePoolMetadata SET revision = revision + 1 WHERE id = 1")
             guard try Row.fetchOne(database, sql: "SELECT id FROM invoiceCreations WHERE draftID = ?", arguments: [draftID.uuidString]) == nil else {
                 throw StoreError.draftChanged
             }
@@ -971,7 +989,7 @@ extension InvoiceStore {
                         number: number, state: creation.state))
                 } else {
                     links.append(PickupInvoiceLink(id: creation.id.uuidString, invoiceID: nil,
-                        number: nil, state: creation.state))
+                        number: creation.plan.reservation?.number, state: creation.state))
                 }
             }
             return links
@@ -1028,6 +1046,8 @@ extension InvoiceStore {
             let operation = try Self.decodeInvoiceCreation(row)
             if operation.state == .completed { return }
             guard operation.state == .pending, operation.invoiceRequest != nil else { throw StoreError.invalidDraft }
+            if let reservation = operation.plan.reservation,
+               (reservation.id != invoice.id || reservation.number != invoice.number) { throw StoreError.invalidCreationReceipt }
             if let receiptData: Data = row["journalReceipt"] {
                 let receipt = try JSONDecoder().decode(InvoiceInitialPaymentReceipt.self, from: receiptData)
                 guard receipt.invoice.id == invoice.id, receipt.invoice.number == invoice.number else {
@@ -1384,6 +1404,115 @@ extension InvoiceStore {
                   invoice.sender?.id != nil,
                   invoice.sender?.name == content.senderName else { return nil }
             return png
+        }
+    }
+}
+
+extension InvoiceStore {
+    func invoicePoolDeviceID() throws -> UUID {
+        try database.write { database in
+            if let stored = try String.fetchOne(database, sql: "SELECT deviceID FROM invoicePoolMetadata WHERE id = 1"), let id = UUID(uuidString: stored) { return id }
+            let id = UUID()
+            try database.execute(sql: "INSERT INTO invoicePoolMetadata (id, deviceID) VALUES (1, ?)", arguments: [id.uuidString.lowercased()])
+            return id
+        }
+    }
+
+    func availableInvoiceReservationCount() throws -> Int {
+        try database.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM invoiceReservations WHERE state = 'available'") ?? 0 }
+    }
+
+    func invoicePoolThreshold() throws -> Int {
+        try database.read { try Int.fetchOne($0, sql: "SELECT lowThreshold FROM invoicePoolMetadata WHERE id = 1") ?? 10 }
+    }
+
+    func availableInvoiceReservations() throws -> [InvoiceReservation] {
+        try database.read { database in
+            try Data.fetchAll(database, sql: "SELECT payload FROM invoiceReservations WHERE state = 'available' ORDER BY id LIMIT 100")
+                .map { try JSONDecoder().decode(InvoiceReservation.self, from: $0) }
+        }
+    }
+
+    /// Reconcile only a completed download. Consumed and quarantined rows are
+    /// protected even when the server still reports them as unused.
+    func invoicePoolRevision() throws -> Int64 {
+        try database.read { try Int64.fetchOne($0, sql: "SELECT revision FROM invoicePoolMetadata WHERE id = 1") ?? 0 }
+    }
+
+    func reconcileInvoiceReservations(_ items: [InvoiceReservation], lowThreshold: Int, expectedRevision: Int64? = nil) throws {
+        let deviceID = try invoicePoolDeviceID()
+        guard lowThreshold >= 0, lowThreshold <= 10_000, Set(items.map(\.id)).count == items.count,
+              items.allSatisfy({ $0.isValid(deviceID: deviceID) }) else { throw StoreError.invoiceReservationChanged }
+        let encoded = try items.map { ($0, try JSONEncoder().encode($0)) }
+        try database.write { database in
+            if let expectedRevision {
+                let current = try Int64.fetchOne(database, sql: "SELECT revision FROM invoicePoolMetadata WHERE id = 1") ?? 0
+                guard current == expectedRevision else { throw StoreError.invoiceReservationChanged }
+            }
+            let available = try Row.fetchAll(database, sql: "SELECT id, token FROM invoiceReservations WHERE state = 'available'")
+            let incoming = Set(items.map(\.id))
+            for row in available {
+                let id: String = row["id"]
+                guard !incoming.contains(id) else { continue }
+                let token: String = row["token"]
+                try database.execute(sql: "INSERT OR IGNORE INTO invoiceReservationRetiredTokens (id, token) VALUES (?, ?)", arguments: [id, token])
+                try database.execute(sql: "UPDATE invoiceReservations SET state = 'returned' WHERE id = ? AND state = 'available'", arguments: [id])
+            }
+            for (item, payload) in encoded {
+                guard try Int.fetchOne(database, sql: "SELECT 1 FROM invoiceReservationRetiredTokens WHERE id = ? AND token = ?", arguments: [item.id, item.allocation.token]) == nil else { continue }
+                try database.execute(sql: "INSERT OR IGNORE INTO invoiceReservationRetiredTokens (id, token) SELECT id, token FROM invoiceReservations WHERE id = ? AND token != ? AND state = 'available'", arguments: [item.id, item.allocation.token])
+                try database.execute(sql: """
+                    INSERT INTO invoiceReservations (id, token, state, payload) VALUES (?, ?, 'available', ?)
+                    ON CONFLICT(id) DO UPDATE SET token = excluded.token, state = 'available', payload = excluded.payload
+                    WHERE invoiceReservations.state = 'available'
+                       OR (invoiceReservations.state = 'returned' AND invoiceReservations.token != excluded.token)
+                    """, arguments: [item.id, item.allocation.token, payload])
+            }
+            try database.execute(sql: "UPDATE invoicePoolMetadata SET lowThreshold = ?, revision = revision + 1 WHERE id = 1", arguments: [lowThreshold])
+        }
+    }
+
+    /// Returning quarantines local availability before the request can leave the
+    /// device. A creation outbox operation has already marked its number consumed.
+    func stageInvoicePoolAction(_ action: InvoicePoolAction) throws {
+        let payload = try JSONEncoder().encode(action)
+        try database.write { database in
+            if action.action == .return {
+                guard let proofs = action.items, !proofs.isEmpty, proofs.count <= 100 else { throw StoreError.invoiceReservationChanged }
+                for proof in proofs {
+                    try database.execute(sql: "UPDATE invoiceReservations SET state = 'returning' WHERE id = ? AND token = ? AND state = 'available'", arguments: [proof.id, proof.token])
+                    guard database.changesCount == 1 else { throw StoreError.invoiceReservationChanged }
+                    try database.execute(sql: "INSERT OR IGNORE INTO invoiceReservationRetiredTokens (id, token) VALUES (?, ?)", arguments: [proof.id, proof.token])
+                }
+            }
+            try database.execute(sql: "INSERT INTO invoicePoolActions (id, payload, createdAt) VALUES (?, ?, ?)", arguments: [action.requestId, payload, Date.now.timeIntervalSince1970])
+            try database.execute(sql: "UPDATE invoicePoolMetadata SET revision = revision + 1 WHERE id = 1")
+        }
+    }
+
+    func invoicePoolActionPayload(id: String) throws -> Data {
+        try database.read { database in
+            guard let payload = try Data.fetchOne(database, sql: "SELECT payload FROM invoicePoolActions WHERE id = ?", arguments: [id]) else { throw StoreError.invoiceReservationChanged }
+            return payload
+        }
+    }
+
+    func pendingInvoicePoolActions() throws -> [InvoicePoolAction] {
+        try database.read { database in
+            try Data.fetchAll(database, sql: "SELECT payload FROM invoicePoolActions ORDER BY createdAt, id LIMIT 100")
+                .map { try JSONDecoder().decode(InvoicePoolAction.self, from: $0) }
+        }
+    }
+
+    func acknowledgeInvoicePoolAction(_ action: InvoicePoolAction) throws {
+        try database.write { database in
+            if action.action == .return {
+                for proof in action.items ?? [] {
+                    try database.execute(sql: "UPDATE invoiceReservations SET state = 'returned' WHERE id = ? AND token = ? AND state = 'returning'", arguments: [proof.id, proof.token])
+                }
+            }
+            try database.execute(sql: "DELETE FROM invoicePoolActions WHERE id = ?", arguments: [action.requestId])
+            try database.execute(sql: "UPDATE invoicePoolMetadata SET revision = revision + 1 WHERE id = 1")
         }
     }
 }

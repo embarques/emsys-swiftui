@@ -28,7 +28,15 @@ struct InvoiceDraftEditorView: View {
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .safeAreaInset(edge: .bottom, spacing: 0) { wizardFooter }
-            .safeAreaInset(edge: .top, spacing: 0) { ConnectionStatusView() }
+            .safeAreaInset(edge: .top, spacing: 0) {
+                VStack(spacing: 0) {
+                    ConnectionStatusView()
+                    if model.creation == nil && model.availableReservations <= model.poolThreshold {
+                        Label(model.availableReservations == 0 ? "invoicePool.empty" : "invoicePool.low", systemImage: "exclamationmark.triangle.fill")
+                            .font(.caption).foregroundStyle(.orange).padding(8)
+                    }
+                }
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("invoiceEdits.cancel") {

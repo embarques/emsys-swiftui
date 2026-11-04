@@ -5,6 +5,9 @@ import Observation
 @Observable
 final class InvoiceDraftListModel: Identifiable {
     let id = UUID()
+    private(set) var availableReservations = 0
+    private(set) var poolThreshold = 10
+    @ObservationIgnored private let canGeneratePool: () -> Bool
     private(set) var drafts: [InvoiceDraftSummary] = []
     private(set) var page = 1
     private(set) var isLoading = false
@@ -23,7 +26,7 @@ final class InvoiceDraftListModel: Identifiable {
     @ObservationIgnored private let currentBranchID: () -> UInt16?
     let assignedOnly: Bool
 
-    init(assignedOnly: Bool = false, store: InvoiceStore, client: APIClient? = nil, canViewItemCatalog: @escaping () -> Bool = { false },
+    init(canGeneratePool: @escaping () -> Bool = { false }, assignedOnly: Bool = false, store: InvoiceStore, client: APIClient? = nil, canViewItemCatalog: @escaping () -> Bool = { false },
          canViewCustomers: @escaping () -> Bool = { false },
          canReviewPolicies: @escaping () -> Bool = { false },
          canViewContainers: @escaping () -> Bool = { false },
@@ -31,6 +34,7 @@ final class InvoiceDraftListModel: Identifiable {
          canReviewPayments: @escaping () -> Bool = { false }, currentBranchID: @escaping () -> UInt16? = { nil },
          financialPermission: @escaping (InvoiceFinancialPermission) -> Bool = { _ in false },
          isAuthorized: @escaping () -> Bool) {
+        self.canGeneratePool = canGeneratePool
         self.assignedOnly = assignedOnly
         self.store = store
         self.isAuthorized = isAuthorized
@@ -46,6 +50,10 @@ final class InvoiceDraftListModel: Identifiable {
     }
 
     var isAvailable: Bool { isAuthorized() }
+
+    func pool() -> InvoicePoolModel {
+        InvoicePoolModel(store: store, client: client, canGenerate: canGeneratePool, isAuthorized: { self.isAuthorized() && self.financialPermission(.createInvoice) })
+    }
 
     func editor(draftID: UUID? = nil) -> InvoiceDraftEditorModel {
         InvoiceDraftEditorModel(assignedOnlyAccess: assignedOnly, draftID: draftID, store: store, client: client,
@@ -63,8 +71,12 @@ final class InvoiceDraftListModel: Identifiable {
         issue = nil
         defer { if requestID == request { isLoading = false } }
         do {
+            let count = try await store.availableInvoiceReservationCount()
+            let threshold = try await store.invoicePoolThreshold()
             let saved = try await store.draftSummaries(offset: (self.page - 1) * 40, assignedOnly: assignedOnly)
             guard requestID == request, isAuthorized(), !Task.isCancelled else { return }
+            availableReservations = count
+            poolThreshold = threshold
             drafts = saved
         } catch {
             if requestID == request, isAuthorized(), !Task.isCancelled { issue = "drafts.loadError" }

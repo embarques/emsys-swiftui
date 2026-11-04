@@ -142,8 +142,10 @@ final class InvoiceDraftEditorModel: Identifiable {
     private(set) var creation: PendingInvoiceCreation?
     private(set) var createdInvoiceNumber: String?
     private(set) var didQueueCreation = false
+    private(set) var poolThreshold = 10
+    private(set) var availableReservations = 0
     var canQueueCreation: Bool {
-        isAvailable && financialPermission(.createInvoice) && creation == nil && isLoaded
+        isAvailable && availableReservations > 0 && financialPermission(.createInvoice) && creation == nil && isLoaded
             && !isSaving && !isLoading && !isPreparingSignature && !isLoadingCustomerDetails && !isLoadingPolicies
     }
 
@@ -179,8 +181,12 @@ final class InvoiceDraftEditorModel: Identifiable {
             let operation = try await store.queueInvoiceCreation(draftID: draftID, expectedRevision: expectedRevision, plan: plan)
             guard isAvailable else { return }
             creation = operation
+            createdInvoiceNumber = operation.plan.reservation?.number
+            availableReservations = max(0, availableReservations - 1)
             original = content
             didQueueCreation = true
+        } catch InvoiceStore.StoreError.invoicePoolEmpty {
+            if isAvailable { availableReservations = 0; issue = "invoicePool.empty" }
         } catch InvoiceStore.StoreError.draftChanged {
             if isAvailable { hasConflict = true; issue = "drafts.changed" }
         } catch InvoiceCreationPlan.PlanError.changedReview {
@@ -689,7 +695,16 @@ final class InvoiceDraftEditorModel: Identifiable {
     }
 
     func load() async {
-        guard !isLoaded, !isLoading, isAuthorized() else { return }
+        guard isAuthorized() else { return }
+        do {
+            availableReservations = try await store.availableInvoiceReservationCount()
+            poolThreshold = try await store.invoicePoolThreshold()
+        } catch {
+            availableReservations = 0
+            if isAuthorized() { issue = "invoicePool.loadError" }
+            return
+        }
+        guard !isLoaded, !isLoading else { return }
         isLoading = true
         issue = nil
         defer { isLoading = false }
@@ -704,7 +719,7 @@ final class InvoiceDraftEditorModel: Identifiable {
             creation = submission
             await refreshAttachmentStatuses()
             guard isAuthorized(), !Task.isCancelled else { return }
-            createdInvoiceNumber = created?.number
+            createdInvoiceNumber = created?.number ?? submission?.plan.reservation?.number
             content = draft.content
             original = draft.content
             expectedRevision = draft.revision

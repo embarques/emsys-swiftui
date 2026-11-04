@@ -16,12 +16,14 @@ struct InvoiceListView: View {
     private enum Sheet: Identifiable {
         case pending(PendingInvoiceEditsModel)
         case drafts(InvoiceDraftListModel)
+        case pool(InvoicePoolModel)
         case document(InvoiceDocumentModel)
         case filters
         var id: String {
             switch self {
             case .pending(let model): model.id.uuidString
             case .drafts(let model): model.id.uuidString
+            case .pool(let model): model.id.uuidString
             case .document(let model): model.id.uuidString
             case .filters: "filters"
             }
@@ -41,16 +43,20 @@ struct InvoiceListView: View {
                     more: { await model.loadMore(online: online) },
                     retry: { await model.retry(online: online) },
                     refresh: { await model.request(query: query, online: online).value })
+                .task { await model.refreshInvoicePoolSummary() }
                 .toolbar {
                     if session.canCreateInvoices {
                         Button { creation = draftListModel(model).editor() } label: {
                             Label("invoiceCreation.title", systemImage: "plus")
-                        }
+                        }.disabled((model.availableReservations ?? 0) == 0)
                     }
                     Button {
                         model.request(query: query, online: online)
                     } label: { Label("invoices.refresh", systemImage: "arrow.clockwise") }
                     Menu {
+                        if session.canCreateInvoices {
+                            Button { sheet = .pool(draftListModel(model).pool()) } label: { Label("invoicePool.title", systemImage: "number") }
+                        }
                         Button {
                             sheet = .drafts(draftListModel(model))
                         } label: { Label("drafts.title", systemImage: "doc.badge.plus") }
@@ -73,8 +79,19 @@ struct InvoiceListView: View {
                     retry: { await prepare() }, refresh: { await prepare() })
             }
         }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if session.canCreateInvoices, let model {
+                if let issue = model.invoicePoolIssue { Text(LocalizedStringKey(issue)).font(.caption).padding(8) }
+                if let count = model.availableReservations, count <= model.poolThreshold {
+                    Button { sheet = .pool(draftListModel(model).pool()) } label: {
+                        Label(count == 0 ? "invoicePool.empty" : "invoicePool.low", systemImage: "exclamationmark.triangle.fill")
+                            .font(.caption).foregroundStyle(.orange).padding(8)
+                    }
+                }
+            }
+        }
         .modifier(InvoicePreviewModifier(preview: preview))
-        .modifier(InvoiceCreationPresentation(editor: $creation))
+        .modifier(InvoiceCreationPresentation(editor: $creation, onDismiss: { Task { await model?.refreshInvoicePoolSummary() } }))
         .onChange(of: session.contextID) { preview.cancel() }
         .navigationTitle(preferences.language.localizedString("navigation.invoices"))
         .navigationDestination(item: $selectedInvoiceID) { id in
@@ -82,10 +99,11 @@ struct InvoiceListView: View {
                 InvoiceDetailView(model: model.detail(for: invoice))
             }
         }
-        .sheet(item: $sheet, onDismiss: { model?.request(query: query, online: online) }) { sheet in
+        .sheet(item: $sheet, onDismiss: { model?.request(query: query, online: online); Task { await model?.refreshInvoicePoolSummary() } }) { sheet in
             switch sheet {
             case .pending(let model): PendingInvoiceEditsView(model: model)
             case .drafts(let model): InvoiceDraftListView(model: model)
+            case .pool(let model): InvoicePoolView(model: model)
             case .document(let model): InvoiceDocumentView(model: model)
             case .filters: InvoiceListFiltersView(query: query) { query = $0 }
             }
@@ -100,12 +118,13 @@ struct InvoiceListView: View {
         }
         .onChange(of: synchronization.lastFinishedAt) {
             model?.request(query: query, online: online)
+            Task { await model?.refreshInvoicePoolSummary() }
         }
     }
 
     private func draftListModel(_ model: InvoiceListModel) -> InvoiceDraftListModel {
         let contextID = session.contextID
-        return model.drafts(canViewItemCatalog: {
+        return model.drafts(canGeneratePool: { session.contextID == contextID && session.permissions?.contains("canGenerateOwnInvoicePool", resourceType: "invoice_pool_self") == true }, canViewItemCatalog: {
             session.contextID == contextID && session.canViewInvoices
                 && session.permissions?.contains("canViewSettings", resourceType: "settings") == true
         }, canViewCustomers: {
