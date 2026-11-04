@@ -104,7 +104,8 @@ struct PickupListView: View {
         PickupDetailView(model: model.detail(pickup, canUpdate: { session.canUpdatePickups }),
             createInvoice: session.canCreatePickupInvoices ? { pickup, receiverID in
                 try await session.pickupInvoiceEditor(pickup, receiverID: receiverID)
-            } : nil)
+            } : nil,
+            prepareInvoices: session.canCreatePickupInvoices ? { try await session.pickupInvoices(pickup.id) } : nil)
             .onDisappear { refreshVersion += 1 }
     }
 

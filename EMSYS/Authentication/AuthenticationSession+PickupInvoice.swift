@@ -56,6 +56,16 @@ extension AuthenticationSession {
             financialPermission: { self.canUsePickupInvoiceAccess(requiredAccess, context: context) && ($0 == .createInvoice || $0.isGranted(by: self.permissions)) },
             isAuthorized: { self.canUsePickupInvoiceAccess(requiredAccess, context: context) })
     }
+    func pickupInvoices(_ pickupID: UInt32) async throws -> PickupInvoicesModel {
+        guard let requiredAccess = pickupInvoiceAccess else { throw AuthenticationIssue.authorization }
+        let context = contextID
+        let access = try await invoiceAccess(allowAssignedCreation: true)
+        guard canUsePickupInvoiceAccess(requiredAccess, context: context) else { throw APIClientError.sessionChanged }
+        return PickupInvoicesModel(pickupID: pickupID, store: access.store, client: access.client,
+            isAuthorized: { self.canUsePickupInvoiceAccess(requiredAccess, context: context) },
+            canEdit: { self.contextID == context && self.canUpdateInvoices })
+    }
+
     func pickupInvoiceDrafts() async throws -> InvoiceDraftListModel {
         guard let requiredAccess = pickupInvoiceAccess else { throw AuthenticationIssue.authorization }
         let context = contextID
