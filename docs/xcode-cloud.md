@@ -85,3 +85,18 @@ No testers or access grants were added. Older builds 6–8 archived successfully
 but reported Ad Hoc and Development export warnings because no iOS devices were
 registered. Those exports do not establish TestFlight delivery. Verify the new
 build's post-action and processing status after merging to main.
+
+## Encryption declaration for uploaded builds
+
+Both app configurations set `INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO`.
+Xcode writes the Boolean `ITSAppUsesNonExemptEncryption = false` into the built
+app's Info.plist on iOS and macOS. This declares the current app's exempt use of
+cryptography (network transport/authentication and system hashing); it does not
+disable encryption. Review the declaration if the app or a linked SDK introduces
+non-exempt encryption functionality.
+
+New uploads carry the declaration so App Store Connect does not repeat the
+export-compliance questionnaire for every build. Already uploaded binaries are
+unchanged and must have their pending questionnaire completed separately.
+
+Apple reference: https://developer.apple.com/documentation/bundleresources/information-property-list/itsappusesnonexemptencryption
