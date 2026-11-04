@@ -1422,6 +1422,14 @@ extension InvoiceStore {
         try database.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM invoiceReservations WHERE state = 'available'") ?? 0 }
     }
 
+    func saveInvoicePoolThreshold(_ threshold: Int) throws {
+        guard (0...10_000).contains(threshold) else { throw StoreError.invoiceReservationChanged }
+        _ = try invoicePoolDeviceID()
+        try database.write { database in
+            try database.execute(sql: "UPDATE invoicePoolMetadata SET lowThreshold = ?, revision = revision + 1 WHERE id = 1", arguments: [threshold])
+        }
+    }
+
     func invoicePoolThreshold() throws -> Int {
         try database.read { try Int.fetchOne($0, sql: "SELECT lowThreshold FROM invoicePoolMetadata WHERE id = 1") ?? 10 }
     }

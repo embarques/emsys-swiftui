@@ -1,6 +1,14 @@
 import Foundation
 
 extension AuthenticationSession {
+    func invoicePoolPreference() async throws -> InvoicePoolPreferenceModel {
+        let context = contextID
+        let access = try await invoiceAccess(allowAssignedCreation: true)
+        guard contextID == context else { throw APIClientError.sessionChanged }
+        return InvoicePoolPreferenceModel(store: access.store, client: access.client,
+            isAuthorized: { self.contextID == context && self.phase == .signedIn })
+    }
+
     var pickupInvoiceAccess: PickupInvoiceAccess? {
         guard canViewPickups else { return nil }
         return PickupInvoiceAccess(canCreateInvoices: canCreateInvoices,
