@@ -24,9 +24,9 @@ struct SignatureCaptureView: View {
                     }
                 }
             }
-            .background(.white)
+            .background(Color(white: 0.96))
             .contentShape(Rectangle())
-            .gesture(DragGesture(minimumDistance: 0)
+            .highPriorityGesture(DragGesture(minimumDistance: 0)
                 .onChanged { value in
                     guard currentStroke.count < 20_000, drawing.strokes.count < 1_000,
                           drawing.strokes.reduce(0, { $0 + $1.count }) + currentStroke.count < 100_000 else { return }
@@ -41,18 +41,16 @@ struct SignatureCaptureView: View {
             .accessibilityLabel("signature.canvas")
             .accessibilityValue(drawing.isEmpty ? Text("signature.empty") : Text("signature.captured"))
         }
-        .background(.white)
+        .background(Color(white: 0.96))
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(.gray.opacity(0.5)))
         .overlay(alignment: .bottom) {
-            VStack(spacing: 8) {
-                SignatureGuideLine().stroke(.gray, style: StrokeStyle(lineWidth: 1, dash: [5]))
-                    .frame(height: 1)
-                Text("signature.signHere").font(.subheadline).foregroundStyle(.black.opacity(0.55))
-            }
-            .padding(.horizontal, 20).padding(.bottom, 12)
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
+            SignatureGuideLine().stroke(.black.opacity(0.25), lineWidth: 1)
+                .frame(height: 1)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 20)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
         }
         .accessibilityHint("signature.instructions")
         .onChange(of: drawing.isEmpty) {

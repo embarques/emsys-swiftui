@@ -7585,6 +7585,142 @@
           }
         }
       }
+    },
+    "signature.createTitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create your signature"
+          }
+        },
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crea tu firma"
+          }
+        }
+      }
+    },
+    "signature.signingAs": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Signing as"
+          }
+        },
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Firmando como"
+          }
+        }
+      }
+    },
+    "signature.signAbove": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign above"
+          }
+        },
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Firma arriba"
+          }
+        }
+      }
+    },
+    "signature.applyNotice": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Applying adds this signature to the invoice you are reviewing."
+          }
+        },
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Al aplicar, esta firma se agrega a la factura que estás revisando."
+          }
+        }
+      }
+    },
+    "signature.apply": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apply signature"
+          }
+        },
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aplicar firma"
+          }
+        }
+      }
+    },
+    "signature.previewTitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Digital signature"
+          }
+        },
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Firma digital"
+          }
+        }
+      }
+    },
+    "signature.edit": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit"
+          }
+        },
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Editar"
+          }
+        }
+      }
+    },
+    "signature.signedBy": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Signed by"
+          }
+        },
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Firmado por"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

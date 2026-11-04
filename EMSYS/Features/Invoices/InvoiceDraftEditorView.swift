@@ -295,12 +295,14 @@ struct InvoiceDraftEditorView: View {
                 get: { model.currentConfirmation?.skipSignature ?? true },
                 set: { model.setSkipSignature($0) }))
             if model.currentConfirmation?.skipSignature == false {
-                if let png = model.currentSenderSignature?.pngData {
-                    InvoiceSignaturePreview(png: png)
-                    Label("invoiceCreation.signatureCaptured", systemImage: "checkmark.circle")
+                if let signature = model.currentSenderSignature, let png = signature.pngData {
+                    InvoiceSignaturePreview(png: png, signerName: signature.signerName,
+                        canEdit: model.content.senderCustomer?.isValid == true && !model.isSaving,
+                        edit: { showsSignature = true })
+                } else {
+                    Button("invoiceCreation.captureSignature") { showsSignature = true }
+                        .disabled(model.content.senderCustomer?.isValid != true)
                 }
-                Button("invoiceCreation.captureSignature") { showsSignature = true }
-                    .disabled(model.content.senderCustomer?.isValid != true)
             }
         }
     }

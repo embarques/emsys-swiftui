@@ -17,11 +17,15 @@ nonisolated struct SignatureDrawing: Codable, Equatable, Sendable {
         case renderingFailed
     }
 
+    static let defaultWidth = 1024
+    static let defaultHeight = 384
+    static let aspectRatio = Double(defaultWidth) / Double(defaultHeight)
+
     var strokes: [[Point]] = []
 
     var isEmpty: Bool { strokes.allSatisfy(\.isEmpty) }
 
-    func pngData(width: Int = 1024, height: Int = 384) async throws -> Data {
+    func pngData(width: Int = SignatureDrawing.defaultWidth, height: Int = SignatureDrawing.defaultHeight) async throws -> Data {
         try await Task.detached(priority: .userInitiated) {
             try renderPNG(width: width, height: height)
         }.value
