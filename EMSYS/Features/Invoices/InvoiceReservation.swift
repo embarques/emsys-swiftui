@@ -8,9 +8,28 @@ nonisolated struct InvoiceReservationProof: Codable, Equatable, Sendable {
 
 nonisolated struct InvoiceReservation: Codable, Equatable, Sendable, Identifiable {
     struct Allocation: Codable, Equatable, Sendable {
-        let employeeId: UInt16
+        let userId: UInt16?
+        // Decode old local reservations without rewriting durable request proofs.
+        let employeeId: UInt16?
         let token: String
         let deviceId: String?
+
+        init(userId: UInt16, token: String, deviceId: String?) {
+            self.userId = userId
+            employeeId = nil
+            self.token = token
+            self.deviceId = deviceId
+        }
+
+        var isUnassigned: Bool {
+            if let userId { return userId == 0 }
+            return employeeId == 0
+        }
+
+        var hasOwner: Bool {
+            if let userId { return userId > 0 }
+            return (employeeId ?? 0) > 0
+        }
     }
     let id: String
     let number: String
@@ -20,7 +39,7 @@ nonisolated struct InvoiceReservation: Codable, Equatable, Sendable, Identifiabl
         InvoiceReservationProof(id: id, token: allocation.token, deviceId: allocation.deviceId ?? "")
     }
     func isValid(deviceID: UUID) -> Bool {
-        InvoiceWriteDocument.isObjectID(id) && !number.isEmpty && allocation.employeeId > 0
+        InvoiceWriteDocument.isObjectID(id) && !number.isEmpty && allocation.hasOwner
             && UUID(uuidString: allocation.deviceId ?? "") == deviceID && !allocation.token.isEmpty
     }
 }
