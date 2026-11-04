@@ -168,3 +168,20 @@ appearance with accessibility text. Existing customer-selection, catalog, draft,
 permission, signature and sync recovery tests remain part of the full gate. Live
 account customer/catalog selection and physical-device keyboard use still need
 manual acceptance; fixture rendering does not establish those behaviors.
+
+## Sender signature layout
+
+The sender signature screen restores the legacy signing composition: a wide
+paper area, dashed baseline and localized signing prompt, with close, clear and
+confirm controls above it. iPhone and iPad use a full-screen presentation; macOS
+keeps a resizable sheet. The canvas adapts to available height and width without
+a scrolling parent competing with drawing gestures. The guide is display-only
+and is not included in the stored PNG. Existing signer validation, invoice
+confirmation, draft persistence and API payload fields remain unchanged.
+
+Native iPhone/iPad fixtures render Spanish labels, sample ink, light appearance
+and dark appearance with accessibility text. Merely presenting sample ink does
+not confirm a signature. Existing regression tests cover invalid/empty exports,
+bounded PNG output and signature persistence/invalidation. Physical-device
+finger/Apple Pencil drawing, rotation and signed-account invoice confirmation
+still require manual acceptance; fixture rendering does not prove those flows.
