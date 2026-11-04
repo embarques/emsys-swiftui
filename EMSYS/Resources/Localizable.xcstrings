@@ -7449,6 +7449,142 @@
           }
         }
       }
+    },
+    "settings.invoicePool.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offline invoice pool"
+          }
+        },
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reserva de facturas sin conexión"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "settings.invoicePool.threshold": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Low invoice warning threshold"
+          }
+        },
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Umbral de aviso de facturas disponibles"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "settings.invoicePool.hint": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The available invoice count turns red at or below this number."
+          }
+        },
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La cantidad de facturas disponibles se muestra en rojo al alcanzar este número o uno menor."
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "settings.invoicePool.save": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save threshold"
+          }
+        },
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Guardar umbral"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "settings.invoicePool.saved": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Threshold saved."
+          }
+        },
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Umbral guardado."
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "settings.invoicePool.loadError": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not refresh your threshold. Your saved value is shown."
+          }
+        },
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo actualizar el umbral. Se muestra el valor guardado."
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "settings.invoicePool.saveError": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not save your threshold. Connect and try again."
+          }
+        },
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo guardar el umbral. Conéctese e inténtelo de nuevo."
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "settings.invoicePool.invalid": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter a whole number from 0 to 10000."
+          }
+        },
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Introduzca un número entero del 0 al 10000."
+          }
+        }
+      }
     }
   },
   "version": "1.0"

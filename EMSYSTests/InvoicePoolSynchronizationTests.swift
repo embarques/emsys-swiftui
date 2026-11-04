@@ -44,8 +44,60 @@ final class InvoicePoolSynchronizationTests: XCTestCase {
         XCTAssertEqual(PoolProtocol.paths.count, 1)
     }
 
+    func testUserThresholdPatchPreservesZeroAndOnlySendsTheThreshold() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try await InvoiceStore.open(directory: directory, userID: "user", companyID: "company")
+        let (client, session) = try makeClient([
+            .success(Data(#"{"success":true,"data":{"invoicePoolThreshold":25,"language":"es","theme":"dark"}}"#.utf8)),
+            .success(Data(#"{"success":true,"data":{"invoicePoolThreshold":0}}"#.utf8))
+        ])
+        defer { session.invalidateAndCancel() }
+        let model = InvoicePoolPreferenceModel(store: store, client: client, isAuthorized: { true })
+        await model.load()
+        XCTAssertEqual(model.threshold, 25)
+        XCTAssertFalse(model.canSave)
+        model.threshold = 0
+        await model.save()
+        XCTAssertTrue(model.saved)
+        let cached = try await store.invoicePoolThreshold()
+        XCTAssertEqual(cached, 0)
+        XCTAssertEqual(PoolProtocol.paths, ["/v1/users/me/preferences", "/v1/users/me/preferences"])
+        XCTAssertEqual(PoolProtocol.methods, ["GET", "PATCH"])
+        let body = try XCTUnwrap(PoolProtocol.bodies.last)
+        let sent = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Int])
+        XCTAssertEqual(sent, ["invoicePoolThreshold":0])
+        model.threshold = 12
+        XCTAssertFalse(model.saved)
+    }
+
+    func testFailedThresholdSaveRetainsCachedValueAndCanRetryWithoutChangingThePool() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try await InvoiceStore.open(directory: directory, userID: "user", companyID: "company")
+        try await store.saveInvoicePoolThreshold(5)
+        let (client, session) = try makeClient([.failure(.notConnectedToInternet), .failure(.networkConnectionLost)])
+        defer { session.invalidateAndCancel() }
+        var authorized = true
+        let model = InvoicePoolPreferenceModel(store: store, client: client, isAuthorized: { authorized })
+        await model.load()
+        XCTAssertEqual(model.threshold, 5)
+        XCTAssertNotNil(model.issue)
+        model.threshold = -1
+        XCTAssertFalse(model.canSave)
+        model.threshold = 30
+        await model.save()
+        XCTAssertNotNil(model.issue)
+        XCTAssertTrue(model.canSave)
+        let cached = try await store.invoicePoolThreshold()
+        XCTAssertEqual(cached, 5)
+        authorized = false
+        await model.save()
+        XCTAssertEqual(PoolProtocol.paths.count, 2)
+    }
+
     private func makeClient(_ responses: [PoolProtocol.Response]) throws -> (APIClient, URLSession) {
-        PoolProtocol.responses = responses; PoolProtocol.bodies = []; PoolProtocol.paths = []
+        PoolProtocol.responses = responses; PoolProtocol.bodies = []; PoolProtocol.paths = []; PoolProtocol.methods = []
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [PoolProtocol.self]
         let session = URLSession(configuration: configuration)
@@ -60,11 +112,13 @@ private final class PoolProtocol: URLProtocol {
     enum Response { case success(Data), status(Int), failure(URLError.Code) }
     nonisolated(unsafe) static var responses: [Response] = []
     nonisolated(unsafe) static var paths: [String] = []
+    nonisolated(unsafe) static var methods: [String] = []
     nonisolated(unsafe) static var bodies: [Data] = []
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func startLoading() {
         Self.paths.append(request.url?.path ?? "")
+        Self.methods.append(request.httpMethod ?? "")
         if let body = request.httpBody { Self.bodies.append(body) }
         else if let stream = request.httpBodyStream {
             stream.open()

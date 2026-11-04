@@ -64,6 +64,13 @@ final class APIClient {
         try await request(path, queryItems: [], method: "PUT", body: encodedBody, as: type)
     }
 
+    func patch<Body: Encodable, Value: Decodable>(
+        _ path: String, body: Body, as type: Value.Type
+    ) async throws -> Value {
+        let payload = try JSONEncoder().encode(body)
+        return try await request(path, queryItems: [], method: "PATCH", body: payload, as: type)
+    }
+
     func upload<Value: Decodable>(
         _ path: String, encodedBody: Data, boundary: String, as type: Value.Type
     ) async throws -> Value {

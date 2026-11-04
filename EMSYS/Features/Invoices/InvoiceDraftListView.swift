@@ -51,6 +51,7 @@ struct InvoiceDraftListView: View {
                     Label("invoicePool.title", systemImage: model.availableReservations <= model.poolThreshold ? "exclamationmark.triangle.fill" : "number")
                     Spacer()
                     Text(String(model.availableReservations)).monospacedDigit()
+                        .foregroundStyle(model.availableReservations <= model.poolThreshold ? Color.red : Color.primary)
                 }.padding()
             }
             if model.availableReservations <= model.poolThreshold {

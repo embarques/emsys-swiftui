@@ -31,9 +31,12 @@ struct InvoiceDraftEditorView: View {
             .safeAreaInset(edge: .top, spacing: 0) {
                 VStack(spacing: 0) {
                     ConnectionStatusView()
-                    if model.creation == nil && model.availableReservations <= model.poolThreshold {
-                        Label(model.availableReservations == 0 ? "invoicePool.empty" : "invoicePool.low", systemImage: "exclamationmark.triangle.fill")
-                            .font(.caption).foregroundStyle(.orange).padding(8)
+                    if model.creation == nil {
+                        InvoicePoolCountView(count: model.availableReservations, threshold: model.poolThreshold)
+                            .font(.caption).padding(.horizontal).padding(.vertical, 8)
+                        if model.availableReservations == 0 {
+                            Text("invoicePool.empty").font(.caption).foregroundStyle(.red).padding(.bottom, 8)
+                        }
                     }
                 }
             }
@@ -58,7 +61,10 @@ struct InvoiceDraftEditorView: View {
                 if case .success(let url) = result { Task { await model.importAttachment(url: url) } }
             }
             .task { await model.load() }
-            .onChange(of: synchronization.lastFinishedAt) { Task { await model.refreshAttachmentStatuses() } }
+            .onChange(of: synchronization.lastFinishedAt) { Task {
+                await model.load()
+                await model.refreshAttachmentStatuses()
+            } }
             .task(id: model.step) {
                 if model.step == .customers { await model.loadCustomerDetails(online: connection.status != .unavailable) }
                 if model.step == .payment {

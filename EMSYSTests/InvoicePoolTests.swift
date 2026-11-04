@@ -149,6 +149,40 @@ final class InvoicePoolTests: XCTestCase {
         XCTAssertEqual(count, 1)
     }
 
+    func testThresholdPersistsPerUserAndTenantAndRejectsStalePoolDownloads() async throws {
+        let (store, directory) = try await fixture()
+        let initial = try await store.invoicePoolThreshold()
+        XCTAssertEqual(initial, 10)
+        _ = try await seed(store)
+        let revision = try await store.invoicePoolRevision()
+        try await store.saveInvoicePoolThreshold(0)
+        let reopened = try await InvoiceStore.open(directory: directory, userID: "user", companyID: "company")
+        let saved = try await reopened.invoicePoolThreshold()
+        XCTAssertEqual(saved, 0)
+        for (user,company) in [("other","company"),("user","other")] {
+            let other = try await InvoiceStore.open(directory: directory, userID: user, companyID: company)
+            let threshold = try await other.invoicePoolThreshold()
+            XCTAssertEqual(threshold, 10)
+        }
+        do {
+            try await store.reconcileInvoiceReservations([], lowThreshold: 10, expectedRevision: revision)
+            XCTFail("A stale download overwrote the edited threshold")
+        } catch InvoiceStore.StoreError.invoiceReservationChanged { }
+        let remaining = try await store.availableInvoiceReservationCount()
+        XCTAssertEqual(remaining, 1)
+        for invalid in [-1, 10001] {
+            do { try await store.saveInvoicePoolThreshold(invalid); XCTFail("Invalid threshold saved") }
+            catch InvoiceStore.StoreError.invoiceReservationChanged { }
+        }
+    }
+
+    func testCountWarningIncludesTheConfiguredBoundary() {
+        XCTAssertFalse(InvoicePoolCountView(count: 11, threshold: 10).isLow)
+        XCTAssertTrue(InvoicePoolCountView(count: 10, threshold: 10).isLow)
+        XCTAssertTrue(InvoicePoolCountView(count: 9, threshold: 10).isLow)
+        XCTAssertTrue(InvoicePoolCountView(count: 0, threshold: 0).isLow)
+    }
+
     private func fixture() async throws -> (InvoiceStore, URL) {
         let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         addTeardownBlock { try? FileManager.default.removeItem(at: directory) }

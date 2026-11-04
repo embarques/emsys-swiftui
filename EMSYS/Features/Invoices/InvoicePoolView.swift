@@ -10,10 +10,10 @@ struct InvoicePoolView: View {
             List {
                 if model.isAvailable {
                     Section {
-                        LabeledContent("invoicePool.available", value: String(model.available))
+                        InvoicePoolCountView(count: model.available, threshold: model.threshold)
                         if model.isLow {
                             Label(model.available == 0 ? "invoicePool.empty" : "invoicePool.low", systemImage: "exclamationmark.triangle.fill")
-                                .foregroundStyle(.orange)
+                                .foregroundStyle(.red)
                         }
                         if let issue = model.issue { Text(LocalizedStringKey(issue)).foregroundStyle(.secondary) }
                         if model.pendingCount > 0 { Text("invoicePool.pending").foregroundStyle(.secondary) }

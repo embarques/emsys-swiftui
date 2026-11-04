@@ -75,3 +75,13 @@ signing settings, or API configuration.
 - [Custom build scripts](https://developer.apple.com/documentation/xcode/writing-custom-build-scripts)
 - [TestFlight distribution](https://developer.apple.com/documentation/xcode/distributing-your-xcode-cloud-builds-through-testflight)
 - [Workflow reference](https://developer.apple.com/documentation/xcode/xcode-cloud-workflow-reference)
+
+## Verified workflow configuration (November 4, 2026)
+
+The existing `Internal TestFlight Build` workflow now uses the iOS archive's
+`TestFlight (Internal Testing Only)` preparation and a `TestFlight Internal
+Testing - iOS` post-action targeting the existing `EMSYS Internal` group.
+No testers or access grants were added. Older builds 6–8 archived successfully
+but reported Ad Hoc and Development export warnings because no iOS devices were
+registered. Those exports do not establish TestFlight delivery. Verify the new
+build's post-action and processing status after merging to main.
