@@ -1,12 +1,12 @@
 # Reserved invoice numbers for offline creation
 
-Backend PR embarques/emsys-api#352 defines the authoritative reservation contract.
-Portal PR embarques/emsys-portal#185 provides management. Deploy and seed those
+Backend PR embarques/emsys-api#354 defines the authoritative reservation contract.
+Portal PR embarques/emsys-portal#189 provides management. Apply the documented ownership migration and deploy those
 contracts before enabling this Apple client. Android adoption is deferred.
 
 The Invoices directory and draft list show a warning when locally usable numbers
 reach the server's low threshold (default 10). New creation is disabled at zero.
-The Reserved invoices sheet downloads unclaimed employee assignments exclusively
+The Reserved invoices sheet downloads unclaimed user assignments exclusively
 for this installation. Users with canGenerateOwnInvoicePool on invoice_pool_self
 can generate 50 numbers for themselves while connected; otherwise an administrator
 must assign a pool in the portal. The backend generates all numbers.
@@ -46,3 +46,9 @@ isolation, receipt identity, exact-byte retry after a lost response, permission
 loss, and existing invoice/payment/pickup outbox recovery tests. Native layout is
 checked with a hosted view fixture. Live Firebase accounts, physical-device
 network synchronization and signed distribution remain separate acceptance checks.
+
+Pool allocations use the tenant user ID, independently of employee IDs. The server
+filters /mine and claim/return actions by the logged-in user. A user does not need
+an employee relationship to download assigned numbers. Employee metadata is resolved
+by the API at invoice creation. Legacy local employee allocations remain decodable
+so pending proofs and frozen invoice requests are preserved through API migration.

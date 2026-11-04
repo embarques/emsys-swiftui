@@ -7,6 +7,31 @@ import AppKit
 
 @MainActor
 final class InvoicePoolTests: XCTestCase {
+    func testUserOwnershipAndLegacyLocalProofsRemainDistinct() throws {
+        let device = UUID()
+        let id = "68f800000000000000000001"
+        let old = "{\"id\":\"\(id)\",\"number\":\"INV-1\",\"allocation\":{\"employeeId\":92,\"token\":\"version\",\"deviceId\":\"\(device.uuidString)\"}}"
+        let legacy = try JSONDecoder().decode(InvoiceReservation.self, from: Data(old.utf8))
+        XCTAssertNil(legacy.allocation.userId)
+        XCTAssertEqual(legacy.allocation.employeeId, 92)
+        XCTAssertTrue(legacy.isValid(deviceID: device))
+        let current = InvoiceReservation(id: id, number: "INV-1",
+            allocation: .init(userId: 37, token: "version", deviceId: device.uuidString))
+        XCTAssertNil(current.allocation.employeeId)
+        XCTAssertEqual(current.allocation.userId, 37)
+        XCTAssertEqual(current.proof, legacy.proof)
+        XCTAssertTrue(current.isValid(deviceID: device))
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(current)) as? [String: Any])
+        let allocation = try XCTUnwrap(object["allocation"] as? [String: Any])
+        XCTAssertEqual(allocation["userId"] as? Int, 37)
+        XCTAssertNil(allocation["employeeId"])
+
+        let missingOwner = old.replacingOccurrences(of: "\"employeeId\":92,", with: "")
+        let malformed = try JSONDecoder().decode(InvoiceReservation.self, from: Data(missingOwner.utf8))
+        XCTAssertFalse(malformed.allocation.hasOwner)
+        XCTAssertFalse(malformed.allocation.isUnassigned, "Missing ownership must not acknowledge a return")
+    }
+
     func testEmptyPoolRejectsCreationWithoutSavingDraftOrOutbox() async throws {
         let (store, _) = try await fixture()
         let id = UUID()
@@ -59,7 +84,7 @@ final class InvoicePoolTests: XCTestCase {
         try await reopened.reconcileInvoiceReservations([reservation], lowThreshold: 10)
         count = try await reopened.availableInvoiceReservationCount(); XCTAssertEqual(count, 0)
         let reassigned = InvoiceReservation(id: reservation.id, number: reservation.number,
-            allocation: .init(employeeId: 12, token: UUID().uuidString.lowercased(), deviceId: deviceID.uuidString.lowercased()))
+            allocation: .init(userId: 12, token: UUID().uuidString.lowercased(), deviceId: deviceID.uuidString.lowercased()))
         try await reopened.reconcileInvoiceReservations([reassigned], lowThreshold: 10)
         count = try await reopened.availableInvoiceReservationCount(); XCTAssertEqual(count, 1)
         let secondReturn = InvoicePoolAction(action: .return, deviceID: deviceID, items: [reassigned])
@@ -191,7 +216,7 @@ final class InvoicePoolTests: XCTestCase {
     private func seed(_ store: InvoiceStore) async throws -> InvoiceReservation {
         let deviceID = try await store.invoicePoolDeviceID()
         let item = InvoiceReservation(id: "000000000000000000000003", number: "INV-TEST-1",
-            allocation: .init(employeeId: 12, token: UUID().uuidString.lowercased(), deviceId: deviceID.uuidString.lowercased()))
+            allocation: .init(userId: 12, token: UUID().uuidString.lowercased(), deviceId: deviceID.uuidString.lowercased()))
         try await store.reconcileInvoiceReservations([item], lowThreshold: 10)
         return item
     }

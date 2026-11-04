@@ -25,13 +25,13 @@ struct InvoicePoolSynchronizer {
               result.allSatisfy({ InvoiceWriteDocument.isObjectID($0.id) && !$0.number.isEmpty && !$0.allocation.token.isEmpty }) else { throw APIClientError.invalidResponse }
         switch action.action {
         case .generate:
-            guard result.count == action.count, result.allSatisfy({ $0.allocation.employeeId > 0 && ($0.allocation.deviceId ?? "").isEmpty }) else { throw APIClientError.invalidResponse }
+            guard result.count == action.count, result.allSatisfy({ $0.allocation.hasOwner && ($0.allocation.deviceId ?? "").isEmpty }) else { throw APIClientError.invalidResponse }
         case .claim:
             guard let deviceID = UUID(uuidString: action.deviceId ?? ""), result.allSatisfy({ $0.isValid(deviceID: deviceID) }) else { throw APIClientError.invalidResponse }
         case .return:
             let proofs = action.items ?? []
             guard Set(result.map(\.id)) == Set(proofs.map(\.id)), result.allSatisfy({ row in
-                row.allocation.employeeId == 0 && (row.allocation.deviceId ?? "").isEmpty
+                row.allocation.isUnassigned && (row.allocation.deviceId ?? "").isEmpty
                     && row.allocation.token != proofs.first(where: { $0.id == row.id })?.token
             }) else { throw APIClientError.invalidResponse }
         }
