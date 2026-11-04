@@ -185,3 +185,23 @@ not confirm a signature. Existing regression tests cover invalid/empty exports,
 bounded PNG output and signature persistence/invalidation. Physical-device
 finger/Apple Pencil drawing, rotation and signed-account invoice confirmation
 still require manual acceptance; fixture rendering does not prove those flows.
+
+## Pickup invoice link
+
+Pickup details replace Create Invoice with saved invoice numbers and an edit
+pencil after creation. The local lookup uses exact `pickup.id` values from cached
+invoices and durable creation plans/receipts; it never matches customer names.
+Pending/review/authorization states remain visible without inventing a number or
+allowing another creation from this screen. A successful sync or closing creation
+reloads the link. Multiple existing associated invoices each get their own row.
+The pencil uses the existing item-name editor and current invoice update grant;
+assigned creation permission does not grant general invoice editing.
+
+Tests cover offline pending/review, successful receipts missing pickup fields,
+SQLite reopen, multiple invoices, deduplication, different pickups/companies and
+permission revocation. Native iPhone/iPad fixtures show Spanish invoice rows in
+light/dark appearance and accessibility text. Live device creation-to-edit remains
+an acceptance check. The current API pickup projection has no invoice references
+and invoice search does not support pickup.id: invoices made elsewhere appear
+only after downloaded locally. No server lookup contract or new edit permission
+has been invented.

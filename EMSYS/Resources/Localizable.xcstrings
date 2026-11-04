@@ -6378,6 +6378,40 @@
         }
       }
     },
+    "pickups.invoiceAwaitingNumber": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Factura sin número confirmado"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invoice awaiting confirmed number"
+          }
+        }
+      }
+    },
+    "pickups.invoiceLinksError": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo consultar la factura de esta recogida. Reintenta antes de crear otra."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not check this pickup’s invoice. Retry before creating another."
+          }
+        }
+      }
+    },
     "pickups.createInvoice": {
       "extractionState": "manual",
       "localizations": {

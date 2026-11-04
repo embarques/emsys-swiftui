@@ -942,6 +942,42 @@ extension InvoiceStore {
         }
     }
 
+    /// Read the actual pickup association, never a customer-name match. Completed
+    /// receipts also retain the link when a server response omits pickup fields.
+    func pickupInvoiceLinks(pickupID: UInt32) throws -> [PickupInvoiceLink] {
+        try database.read { database in
+            let rows = try Row.fetchAll(database, sql: """
+                SELECT id, number FROM invoiceSnapshots
+                WHERE json_extract(CAST(payload AS TEXT), '$.pickup.id') = ?
+                ORDER BY number COLLATE NOCASE, id
+                """, arguments: [pickupID])
+            var links = rows.map { row in
+                let id: String = row["id"]
+                return PickupInvoiceLink(id: id, invoiceID: id, number: row["number"], state: nil)
+            }
+            var invoiceIDs = Set(links.compactMap(\.invoiceID))
+            let creations = try Row.fetchAll(database, sql: """
+                SELECT * FROM invoiceCreations
+                WHERE json_extract(CAST(plan AS TEXT), '$.content.pickup.id') = ?
+                ORDER BY createdAt, id
+                """, arguments: [pickupID])
+            for row in creations {
+                let creation = try Self.decodeInvoiceCreation(row)
+                if let invoiceID = creation.invoiceID {
+                    guard invoiceIDs.insert(invoiceID).inserted else { continue }
+                    let number = try String.fetchOne(database,
+                        sql: "SELECT number FROM invoiceSnapshots WHERE id = ?", arguments: [invoiceID])
+                    links.append(PickupInvoiceLink(id: invoiceID, invoiceID: invoiceID,
+                        number: number, state: creation.state))
+                } else {
+                    links.append(PickupInvoiceLink(id: creation.id.uuidString, invoiceID: nil,
+                        number: nil, state: creation.state))
+                }
+            }
+            return links
+        }
+    }
+
     func invoiceCreation(draftID: UUID) throws -> PendingInvoiceCreation? {
         try database.read {
             try Row.fetchOne($0, sql: "SELECT * FROM invoiceCreations WHERE draftID = ?", arguments: [draftID.uuidString])

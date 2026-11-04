@@ -7,6 +7,9 @@ struct PickupDetailView: View {
     @State private var confirmsCompletion = false
     @State private var confirmsDiscard = false
     var createInvoice: ((Pickup, String?) async throws -> InvoiceDraftEditorModel)? = nil
+    var prepareInvoices: (() async throws -> PickupInvoicesModel)? = nil
+    @State private var linkedInvoices: PickupInvoicesModel?
+    @State private var existingInvoiceEditor: InvoiceItemEditorModel?
     @State private var invoiceEditor: InvoiceDraftEditorModel?
     @State private var choosesReceiver = false
     @State private var isPreparingInvoice = false
@@ -35,15 +38,23 @@ struct PickupDetailView: View {
             Button("pickupSync.useServer", role: .destructive) { Task { await model.discardRejectedCompletion() } }
             Button("invoiceEdits.cancel", role: .cancel) { }
         }
-        .onChange(of: synchronization.lastFinishedAt) { Task { await model.refresh(online: false) } }
+        .onChange(of: synchronization.lastFinishedAt) {
+            Task { await model.refresh(online: false); await linkedInvoices?.load() }
+        }
         .confirmationDialog("pickups.chooseInvoiceReceiver", isPresented: $choosesReceiver, titleVisibility: .visible) {
             ForEach(PickupInvoicePrefill.receivers(in: model.pickup), id: \.id) { receiver in
                 Button(receiver.name ?? "—") { prepareInvoice(receiverID: receiver.id) }
             }
             Button("invoiceEdits.cancel", role: .cancel) { }
         }
-        .modifier(InvoiceCreationPresentation(editor: $invoiceEditor))
-        .task { await model.refresh(online: online) }
+        .modifier(InvoiceCreationPresentation(editor: $invoiceEditor, onDismiss: {
+            Task { await linkedInvoices?.load() }
+        }))
+        .sheet(item: $existingInvoiceEditor) { InvoiceItemEditorView(model: $0) }
+        .task {
+            await loadLinkedInvoices()
+            await model.refresh(online: online)
+        }
     }
 
     private var detailList: some View {
@@ -103,17 +114,29 @@ struct PickupDetailView: View {
             }
             if createInvoice != nil {
                 Section {
-                    Button {
-                        if PickupInvoicePrefill.receivers(in: model.pickup).count > 1 { choosesReceiver = true }
-                        else { prepareInvoice(receiverID: nil) }
-                    } label: {
-                        Label("pickups.createInvoice", systemImage: "doc.badge.plus")
-                            .font(.headline).padding(.vertical, 8)
+                    if let linkedInvoices {
+                        PickupInvoiceLinksView(model: linkedInvoices) { existingInvoiceEditor = $0 }
                     }
-                    .disabled(isPreparingInvoice || model.isLoading || model.requiresRefresh)
-                    if isPreparingInvoice { ProgressView() }
-                    if let invoiceIssue { Text(LocalizedStringKey(invoiceIssue)).foregroundStyle(.secondary) }
-                } footer: { Text("pickups.createInvoiceHint") }
+                    if linkedInvoices?.mayCreate == true {
+                        Button {
+                            if PickupInvoicePrefill.receivers(in: model.pickup).count > 1 { choosesReceiver = true }
+                            else { prepareInvoice(receiverID: nil) }
+                        } label: {
+                            Label("pickups.createInvoice", systemImage: "doc.badge.plus")
+                                .font(.headline).padding(.vertical, 8)
+                        }
+                        .disabled(isPreparingInvoice || model.isLoading || model.requiresRefresh)
+                    }
+                    if isPreparingInvoice || linkedInvoices == nil && invoiceIssue == nil { ProgressView() }
+                    if let invoiceIssue {
+                        Text(LocalizedStringKey(invoiceIssue)).foregroundStyle(.secondary)
+                        if linkedInvoices == nil {
+                            Button("auth.retry") { Task { await loadLinkedInvoices() } }
+                        }
+                    }
+                } footer: {
+                    if linkedInvoices?.mayCreate == true { Text("pickups.createInvoiceHint") }
+                }
             }
             if let operation = model.completion {
                 Section {
@@ -141,8 +164,16 @@ struct PickupDetailView: View {
         .frame(maxWidth: .infinity)
     }
 
+    private func loadLinkedInvoices() async {
+        invoiceIssue = nil
+        do {
+            linkedInvoices = try await prepareInvoices?()
+            await linkedInvoices?.load()
+        } catch { invoiceIssue = "pickups.invoiceLinksError" }
+    }
+
     private func prepareInvoice(receiverID: String?) {
-        guard let createInvoice, !isPreparingInvoice else { return }
+        guard let createInvoice, linkedInvoices?.mayCreate == true, !isPreparingInvoice else { return }
         isPreparingInvoice = true
         invoiceIssue = nil
         Task {
