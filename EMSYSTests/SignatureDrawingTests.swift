@@ -59,7 +59,11 @@ extension SignatureDrawingTests {
             .init(x: 0.34, y: 0.28), .init(x: 0.35, y: 0.57), .init(x: 0.46, y: 0.46),
             .init(x: 0.55, y: 0.55), .init(x: 0.69, y: 0.34), .init(x: 0.76, y: 0.57)
         ]])
-        let host = UIHostingController(rootView: AnyView(InvoiceSenderSignatureView(model: model, drawing: drawing)
+        let host = UIHostingController(rootView: AnyView(Text("invoiceCreation.title")
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .sheet(isPresented: .constant(true)) {
+                InvoiceSenderSignatureView(model: model, drawing: drawing)
+            }
             .environment(\.locale, Locale(identifier: "es-DO"))))
         let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let previous = scene.windows.first(where: \.isKeyWindow)
@@ -77,6 +81,8 @@ extension SignatureDrawingTests {
             }
             try await Task.sleep(for: .milliseconds(300))
             window.layoutIfNeeded()
+            XCTAssertNotNil(host.presentedViewController?.sheetPresentationController,
+                "Signature capture must use a native sheet instead of a full-screen cover")
             let image = UIGraphicsImageRenderer(bounds: window.bounds).image { _ in
                 window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
             }
@@ -84,6 +90,7 @@ extension SignatureDrawingTests {
             try XCTUnwrap(image.pngData()).write(to: FileManager.default.temporaryDirectory
                 .appending(path: "emsys-sender-signature-\(device)-\(appearance).png"))
         }
+        host.dismiss(animated: false)
         // Previewing a saved image must never apply a replacement to the draft.
         let png = try await drawing.pngData()
         host.rootView = AnyView(ScrollView {

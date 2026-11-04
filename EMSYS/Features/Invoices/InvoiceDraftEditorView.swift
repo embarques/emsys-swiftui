@@ -87,11 +87,7 @@ struct InvoiceDraftEditorView: View {
                     catalogSelection = nil
                 }
             }
-            #if os(iOS)
-            .fullScreenCover(isPresented: $showsSignature) { InvoiceSenderSignatureView(model: model) }
-            #else
             .sheet(isPresented: $showsSignature) { InvoiceSenderSignatureView(model: model) }
-            #endif
             .onChange(of: model.didQueueCreation) {
                 if model.didQueueCreation { synchronization.requestUpload(); dismiss() }
             }

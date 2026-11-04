@@ -61,7 +61,10 @@ struct InvoiceSenderSignatureView: View {
         }
         .background(.background)
         .interactiveDismissDisabled(model.isPreparingSignature)
-        #if os(macOS)
+        #if os(iOS)
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
+        #elseif os(macOS)
         .frame(minWidth: 520, minHeight: 600)
         #endif
     }
