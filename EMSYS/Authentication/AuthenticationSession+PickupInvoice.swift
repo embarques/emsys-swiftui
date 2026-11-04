@@ -72,7 +72,7 @@ extension AuthenticationSession {
         let assignedOnly = requiredAccess.assignedOnly
         let access = try await invoiceAccess(allowAssignedCreation: true)
         guard canUsePickupInvoiceAccess(requiredAccess, context: context) else { throw APIClientError.sessionChanged }
-        return InvoiceDraftListModel(assignedOnly: assignedOnly, store: access.store, client: access.client,
+        return InvoiceDraftListModel(canGeneratePool: { self.contextID == context && self.permissions?.contains("canGenerateOwnInvoicePool", resourceType: "invoice_pool_self") == true }, assignedOnly: assignedOnly, store: access.store, client: access.client,
             canViewItemCatalog: { self.contextID == context && (self.canCreateAssignedPickupInvoices || self.permissions?.contains("canViewSettings", resourceType: "settings") == true) },
             canViewCustomers: { self.contextID == context && !assignedOnly && self.canViewCustomers },
             canReviewPolicies: { self.contextID == context && (self.canCreateAssignedPickupInvoices || self.canReviewInvoicePolicies) },

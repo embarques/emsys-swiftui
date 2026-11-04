@@ -289,7 +289,8 @@ final class InvoiceCreationOutboxTests: XCTestCase {
         for key in ["container", "pickupSource", "receivedBy", "route", "pickupEmployee", "officeBranch"] {
             XCTAssertNil(invoice[key], "Unknown operational assignment must be omitted, never fabricated")
         }
-        XCTAssertEqual(invoice["autoGenerateNumber"] as? Bool, true)
+        XCTAssertEqual(invoice["autoGenerateNumber"] as? Bool, false)
+        XCTAssertNotNil(invoice["reservation"])
     }
 
     func testAttachmentsWaitDurablyForLaterContainerAssignment() async throws {
@@ -418,6 +419,7 @@ final class InvoiceCreationOutboxTests: XCTestCase {
         let editor = InvoiceDraftEditorModel(store: store, currentBranchID: { 1 },
             financialPermission: { [.createInvoice, .recordPayment].contains($0) }, isAuthorized: { true })
         editor.content = try makePlan(payment: "5").content
+        await editor.load()
         XCTAssertNil(editor.content.paymentReview)
         XCTAssertNil(editor.validationIssue(for: .payment))
         await editor.queueCreation()
@@ -552,7 +554,13 @@ final class InvoiceCreationOutboxTests: XCTestCase {
         signed.senderSignature = InvoiceSenderSignature(signerName: signed.senderName, data: png.base64EncodedString(), contentType: "image/png")
         let plan = try InvoiceCreationPlan(content: signed, branch: .init(id: 1, name: nil, code: "NY"))
         let assigned = try await store.queueInvoiceCreation(draftID: UUID(), expectedRevision: nil, plan: plan)
-        let (firstClient, firstSession) = try makeClient([.success(receiptResponse), .failure(.networkConnectionLost)])
+        let assignedReceipt = Data(String(decoding: receiptResponse, as: UTF8.self)
+            .replacingOccurrences(of: "000000000000000000000003", with: "000000000000000000000004")
+            .replacingOccurrences(of: "INV-TEST-1", with: "INV-TEST-2").utf8)
+        let assignedInvoice = Data(String(decoding: invoiceResponse, as: UTF8.self)
+            .replacingOccurrences(of: "000000000000000000000003", with: "000000000000000000000004")
+            .replacingOccurrences(of: "INV-TEST-1", with: "INV-TEST-2").utf8)
+        let (firstClient, firstSession) = try makeClient([.success(assignedReceipt), .failure(.networkConnectionLost)])
         defer { firstSession.invalidateAndCancel() }
         do { try await InvoiceCreationUploader(client: firstClient, store: store, assignedOnly: true).synchronize(); XCTFail("Expected lost invoice response") }
         catch { }
@@ -568,7 +576,7 @@ final class InvoiceCreationOutboxTests: XCTestCase {
         XCTAssertEqual(pending?.id, assigned.id)
         XCTAssertEqual(pending?.invoiceRequest, attempted)
         XCTAssertEqual(pending?.plan.content.assignedPickup?.pickupID, 42)
-        let (retryClient, retrySession) = try makeClient([.success(invoiceResponse)])
+        let (retryClient, retrySession) = try makeClient([.success(assignedInvoice)])
         defer { retrySession.invalidateAndCancel() }
         try await InvoiceCreationUploader(client: retryClient, store: reopened, assignedOnly: true).synchronize()
         XCTAssertEqual(CreationProtocol.paths, ["/v1/invoices/sync/create-assigned"])
@@ -646,7 +654,9 @@ final class InvoiceCreationOutboxTests: XCTestCase {
     }
     private func temporaryDirectory() -> URL { FileManager.default.temporaryDirectory.appending(path: UUID().uuidString) }
     private func open(_ directory: URL) async throws -> InvoiceStore {
-        try await InvoiceStore.open(directory: directory, userID: "user", companyID: "company")
+        let store = try await InvoiceStore.open(directory: directory, userID: "user", companyID: "company")
+        if try await store.availableInvoiceReservationCount() == 0 { try await seedInvoicePoolFixture(store) }
+        return store
     }
     private func makeClient(_ responses: [CreationProtocol.Response]) throws -> (APIClient, URLSession) {
         CreationProtocol.responses = responses

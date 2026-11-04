@@ -4,6 +4,7 @@ struct InvoiceDraftListView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(SynchronizationState.self) private var synchronization
     @State var model: InvoiceDraftListModel
+    @State private var pool: InvoicePoolModel?
     @State private var editor: InvoiceDraftEditorModel?
     @State private var draftToDelete: InvoiceDraftSummary?
 
@@ -21,12 +22,13 @@ struct InvoiceDraftListView: View {
                 ToolbarItem(placement: .cancellationAction) { Button("documents.close") { dismiss() } }
                 ToolbarItem(placement: .primaryAction) {
                     Button { editor = model.editor() } label: { Label("drafts.new", systemImage: "plus") }
-                        .disabled(!model.isAvailable || model.assignedOnly)
+                        .disabled(!model.isAvailable || model.assignedOnly || model.availableReservations == 0)
                 }
             }
             .safeAreaInset(edge: .top, spacing: 0) { ConnectionStatusView() }
             .task { await model.load() }
             .onChange(of: synchronization.lastFinishedAt) { Task { await model.load() } }
+            .sheet(item: $pool, onDismiss: { Task { await model.load() } }) { InvoicePoolView(model: $0) }
             .modifier(InvoiceCreationPresentation(editor: $editor, onDismiss: { Task { await model.load() } }))
             .confirmationDialog("drafts.deletePrompt", isPresented: Binding(
                 get: { draftToDelete != nil }, set: { if !$0 { draftToDelete = nil } }
@@ -44,6 +46,16 @@ struct InvoiceDraftListView: View {
 
     private var draftList: some View {
         VStack(spacing: 0) {
+            Button { pool = model.pool() } label: {
+                HStack {
+                    Label("invoicePool.title", systemImage: model.availableReservations <= model.poolThreshold ? "exclamationmark.triangle.fill" : "number")
+                    Spacer()
+                    Text(String(model.availableReservations)).monospacedDigit()
+                }.padding()
+            }
+            if model.availableReservations <= model.poolThreshold {
+                Text(model.availableReservations == 0 ? "invoicePool.empty" : "invoicePool.low").font(.caption).padding(.horizontal)
+            }
             if let issue = model.issue { Text(LocalizedStringKey(issue)).padding() }
             List(model.drafts) { draft in
                 Button { editor = model.editor(draftID: draft.id) } label: {

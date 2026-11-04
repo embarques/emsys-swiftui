@@ -4,6 +4,21 @@ import Observation
 @MainActor
 @Observable
 final class InvoiceListModel {
+    private(set) var availableReservations: Int?
+    private(set) var poolThreshold = 10
+    private(set) var invoicePoolIssue: String?
+
+    func refreshInvoicePoolSummary() async {
+        do {
+            let count = try await store.availableInvoiceReservationCount()
+            let threshold = try await store.invoicePoolThreshold()
+            guard !Task.isCancelled else { return }
+            availableReservations = count; poolThreshold = threshold; invoicePoolIssue = nil
+        } catch {
+            availableReservations = nil; invoicePoolIssue = "invoicePool.loadError"
+        }
+    }
+
     private(set) var invoices: [Invoice] = []
     private(set) var page = 0
     private(set) var isLoading = false
@@ -64,13 +79,13 @@ final class InvoiceListModel {
         PendingInvoiceEditsModel(client: client, store: store, isAuthorized: isAuthorized, canEdit: canEdit)
     }
 
-    func drafts(canViewItemCatalog: @escaping () -> Bool = { false }, canViewCustomers: @escaping () -> Bool, canReviewPolicies: @escaping () -> Bool,
+    func drafts(canGeneratePool: @escaping () -> Bool = { false }, canViewItemCatalog: @escaping () -> Bool = { false }, canViewCustomers: @escaping () -> Bool, canReviewPolicies: @escaping () -> Bool,
                 canViewContainers: @escaping () -> Bool,
                 canViewAssignments: @escaping (InvoiceAssignmentPermission) -> Bool,
                 canReviewPayments: @escaping () -> Bool, currentBranchID: @escaping () -> UInt16?,
                 financialPermission: @escaping (InvoiceFinancialPermission) -> Bool = { _ in false },
                 isAuthorized: @escaping () -> Bool) -> InvoiceDraftListModel {
-        InvoiceDraftListModel(store: store, client: client, canViewItemCatalog: canViewItemCatalog, canViewCustomers: canViewCustomers,
+        InvoiceDraftListModel(canGeneratePool: canGeneratePool, store: store, client: client, canViewItemCatalog: canViewItemCatalog, canViewCustomers: canViewCustomers,
             canReviewPolicies: canReviewPolicies, canViewContainers: canViewContainers,
             canViewAssignments: canViewAssignments, canReviewPayments: canReviewPayments,
             currentBranchID: currentBranchID, financialPermission: financialPermission, isAuthorized: isAuthorized)

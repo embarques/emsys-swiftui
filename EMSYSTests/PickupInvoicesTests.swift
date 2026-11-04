@@ -11,6 +11,7 @@ final class PickupInvoicesTests: XCTestCase {
         let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = try await InvoiceStore.open(directory: directory, userID: "user", companyID: "company")
+        try await seedInvoicePoolFixture(store, prefix: "NY-", start: 123)
         var authorized = true
         var editable = true
         let client = try APIClient(baseURL: XCTUnwrap(URL(string: "https://example.test/v1"))) { _ in
@@ -24,7 +25,7 @@ final class PickupInvoicesTests: XCTestCase {
         let operation = try await store.queueInvoiceCreation(draftID: UUID(), expectedRevision: nil, plan: plan(pickupID: 42))
         await model.load()
         XCTAssertFalse(model.mayCreate)
-        XCTAssertNil(model.links.first?.number, "An offline submission has no authoritative invoice number")
+        XCTAssertEqual(model.links.first?.number, "NY-123", "Offline creation retains its backend-reserved invoice number")
         XCTAssertNil(model.editor(for: try XCTUnwrap(model.links.first)))
         try await store.setInvoiceCreationState(id: operation.id, state: .needsReview)
         await model.load()
@@ -58,6 +59,7 @@ final class PickupInvoicesTests: XCTestCase {
         let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = try await InvoiceStore.open(directory: directory, userID: "user", companyID: "company")
+        try await seedInvoicePoolFixture(store, prefix: "NY-", start: 123)
         let operation = try await store.queueInvoiceCreation(draftID: UUID(), expectedRevision: nil, plan: plan(pickupID: 42))
         let invoice = try fixture(id: "000000000000000000000003", number: "NY-123", pickupID: 42)
         try await store.completeInvoiceCreation(id: operation.id, invoice: invoice)
@@ -95,6 +97,7 @@ final class PickupInvoicesTests: XCTestCase {
         let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = try await InvoiceStore.open(directory: directory, userID: "user", companyID: "company")
+        try await seedInvoicePoolFixture(store, prefix: "NY-", start: 123)
         try await store.saveDownloaded([fixture(id: "000000000000000000000003", number: "NY-12345", pickupID: 42)])
         let client = try APIClient(baseURL: XCTUnwrap(URL(string: "https://example.test/v1"))) { _ in
             throw APIClientError.sessionChanged

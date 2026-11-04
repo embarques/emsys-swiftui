@@ -1,6 +1,278 @@
 {
   "sourceLanguage": "es-DO",
   "strings": {
+    "sync.reviewRequired": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hay cambios guardados pendientes de revisión. Revísalos antes de volver a sincronizar."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Some saved changes need review. Review them before synchronizing again."
+          }
+        }
+      }
+    },
+    "invoicePool.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Facturas reservadas"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reserved invoices"
+          }
+        }
+      }
+    },
+    "invoicePool.available": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Números disponibles sin conexión"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Numbers available offline"
+          }
+        }
+      }
+    },
+    "invoicePool.empty": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No tiene números reservados. Solicite un grupo al administrador para crear facturas."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No reserved numbers remain. Ask an administrator for a pool before creating invoices."
+          }
+        }
+      }
+    },
+    "invoicePool.low": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quedan pocos números de factura reservados."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your reserved invoice numbers are running low."
+          }
+        }
+      }
+    },
+    "invoicePool.download": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Descargar asignaciones"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download assignments"
+          }
+        }
+      }
+    },
+    "invoicePool.generate": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Generar 50 números para mí"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Generate 50 numbers for me"
+          }
+        }
+      }
+    },
+    "invoicePool.administrator": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Para generar números necesita conexión y permiso. Sin ese permiso, el administrador debe asignarle un grupo."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Generation requires connectivity and permission. Without that permission, an administrator must assign your pool."
+          }
+        }
+      }
+    },
+    "invoicePool.unused": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Números sin usar"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unused numbers"
+          }
+        }
+      }
+    },
+    "invoicePool.return": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Devolver"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Return"
+          }
+        }
+      }
+    },
+    "invoicePool.returnNotice": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo se muestran hasta 100 números disponibles. Las facturas pendientes de sincronizar no se pueden devolver."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Up to 100 available numbers are shown. Numbers used by invoices awaiting synchronization cannot be returned."
+          }
+        }
+      }
+    },
+    "invoicePool.returnPrompt": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Devolver este número sin usar al grupo de la empresa?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Return this unused number to the company pool?"
+          }
+        }
+      }
+    },
+    "invoicePool.refresh": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Actualizar y reintentar"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Refresh and retry"
+          }
+        }
+      }
+    },
+    "invoicePool.syncError": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo confirmar la sincronización. Se conservaron las solicitudes para reintentarlas; no se generarán duplicados."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Synchronization could not be confirmed. Saved requests will retry without generating duplicates."
+          }
+        }
+      }
+    },
+    "invoicePool.loadError": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudieron cargar los números reservados."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reserved numbers could not be loaded."
+          }
+        }
+      }
+    },
+    "invoicePool.pending": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hay una solicitud pendiente. Los números que se están devolviendo quedan bloqueados hasta confirmar la devolución."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A request is pending. Numbers being returned stay unavailable until the return is confirmed."
+          }
+        }
+      }
+    },
     "": {},
     "%@ × %@": {
       "localizations": {

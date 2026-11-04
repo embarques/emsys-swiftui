@@ -17,6 +17,7 @@ struct AppRootView: View {
             } else {
                 NavigationStack {
                     accountContent
+                        .safeAreaInset(edge: .top, spacing: 0) { ConnectionStatusView() }
                         .toolbar {
                             NavigationLink { SettingsView() } label: {
                                 Label(AppDestination.settings.title, systemImage: AppDestination.settings.systemImageName)
@@ -25,7 +26,6 @@ struct AppRootView: View {
                 }
             }
         }
-        .safeAreaInset(edge: .top, spacing: 0) { ConnectionStatusView() }
         .onChange(of: session.phase) {
             selectedDestination = .invoices
             compactColumn = .sidebar
@@ -119,6 +119,7 @@ struct AppRootView: View {
             get: { selectedDestination ?? .invoices }, set: { selectedDestination = $0 }
         )) { destination in
             destinationContent(destination)
+                .safeAreaInset(edge: .top, spacing: 0) { ConnectionStatusView() }
         }
         #else
         NavigationSplitView(columnVisibility: $columnVisibility, preferredCompactColumn: $compactColumn) {
@@ -127,6 +128,7 @@ struct AppRootView: View {
         } detail: {
             NavigationStack {
                 destinationContent(selectedDestination ?? .invoices)
+                    .safeAreaInset(edge: .top, spacing: 0) { ConnectionStatusView() }
             }
             .id(selectedDestination)
         }

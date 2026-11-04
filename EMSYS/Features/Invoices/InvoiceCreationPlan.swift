@@ -6,15 +6,22 @@ nonisolated struct InvoiceCreationPlan: Codable, Sendable {
     let invoiceRequestID: UUID
     let journalRequestID: UUID
     let content: InvoiceDraft.Content
+    let reservation: InvoiceReservation?
     let branch: AuthenticatedUser.Branch
 
     init(content: InvoiceDraft.Content, branch: AuthenticatedUser.Branch,
-         invoiceRequestID: UUID = UUID(), journalRequestID: UUID = UUID()) throws {
+         invoiceRequestID: UUID = UUID(), journalRequestID: UUID = UUID(), reservation: InvoiceReservation? = nil) throws {
+        self.reservation = reservation
         self.content = content
         self.branch = branch
         self.invoiceRequestID = invoiceRequestID
         self.journalRequestID = journalRequestID
         _ = try validated()
+    }
+
+    func reserving(_ reservation: InvoiceReservation) throws -> InvoiceCreationPlan {
+        try InvoiceCreationPlan(content: content, branch: branch, invoiceRequestID: invoiceRequestID,
+            journalRequestID: journalRequestID, reservation: reservation)
     }
 
     var requiresJournal: Bool { ((try? validated().totals.payment) ?? 0) > 0 }
@@ -53,7 +60,7 @@ nonisolated struct InvoiceCreationPlan: Codable, Sendable {
         guard checked.amounts.subtotal > 0 else { throw PlanError.incomplete }
         let entry = JournalEntry(branch: branch, transactionType: "INITIAL-PAYMENT", amount: checked.totals.payment,
             description: payment.description,
-            invoice: JournalInvoice(autoGenerateNumber: true, cost: checked.amounts.subtotal, discount: checked.totals.discount),
+            invoice: JournalInvoice(autoGenerateNumber: reservation == nil, number: reservation?.number, reservation: reservation?.proof, cost: checked.amounts.subtotal, discount: checked.totals.discount),
             sender: try content.senderWriteSnapshot?.party(addressID: content.senderAddressID),
             receiver: try content.receiverWriteSnapshot?.party(addressID: content.receiverAddressID),
             paymentMethod: Method(id: method.lookupID, name: method.rawValue),
@@ -76,11 +83,12 @@ nonisolated struct InvoiceCreationPlan: Codable, Sendable {
                   InvoiceWriteDocument.isObjectID(receipt.invoice.id), !receipt.invoice.number.isEmpty,
                   receipt.invoice.cost.isFinite, abs(receipt.invoice.cost - checked.amounts.subtotal) < 0.005,
                   receipt.incomeStatement.id > 0 else { throw PlanError.invalidReceipt }
+            if let reservation, (receipt.invoice.id != reservation.id || receipt.invoice.number != reservation.number) { throw PlanError.invalidReceipt }
             number = receipt.invoice.number
             paid = receipt.invoice.payment ?? 0
         } else {
             guard receipt == nil else { throw PlanError.invalidReceipt }
-            number = nil
+            number = reservation?.number
             paid = 0
         }
         let balance = ((checked.amounts.subtotal - checked.totals.discount - paid) * 100).rounded() / 100
@@ -98,7 +106,7 @@ nonisolated struct InvoiceCreationPlan: Codable, Sendable {
         if let confirmation = content.confirmation, confirmation.matches(content), !confirmation.skipSignature {
             signature = content.senderSignature
         } else { signature = nil }
-        let request = InvoiceRequest(autoGenerateNumber: number == nil, number: number, date: content.date.apiValue,
+        let request = InvoiceRequest(autoGenerateNumber: number == nil, reservation: receipt == nil ? reservation?.proof : nil, number: number, date: content.date.apiValue,
             paidRegion: normalizedRegion, branch: branch, incomeStatement: receipt.map { Statement(id: $0.incomeStatement.id) },
             cost: checked.amounts.subtotal, discount: checked.totals.discount, payment: paid, balance: balance,
             container: content.container, sender: try content.senderWriteSnapshot?.party(addressID: content.senderAddressID),
@@ -173,6 +181,8 @@ nonisolated struct InvoiceCreationPlan: Codable, Sendable {
     }
     private struct JournalInvoice: Encodable {
         let autoGenerateNumber: Bool
+        let number: String?
+        let reservation: InvoiceReservationProof?
         let cost: Double
         let discount: Double
     }
@@ -193,6 +203,7 @@ nonisolated struct InvoiceCreationPlan: Codable, Sendable {
     }
     private struct InvoiceRequest: Encodable {
         let autoGenerateNumber: Bool
+        let reservation: InvoiceReservationProof?
         let number: String?
         let date: String
         let paidRegion: String

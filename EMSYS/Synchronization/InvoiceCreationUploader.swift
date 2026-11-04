@@ -9,6 +9,9 @@ struct InvoiceCreationUploader {
 
     func synchronize() async throws {
         var needsAttention = false
+        do { try await InvoicePoolSynchronizer(client: client, store: store).synchronizeActions() }
+        catch APIClientError.sessionChanged { throw APIClientError.sessionChanged }
+        catch { needsAttention = true }
         while true {
             let operations = try await store.pendingInvoiceCreations(assignedOnly: assignedOnly)
             guard !operations.isEmpty else { break }
