@@ -1,6 +1,23 @@
 {
   "sourceLanguage": "es-DO",
   "strings": {
+    "sync.reviewRequired": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hay cambios guardados pendientes de revisión. Revísalos antes de volver a sincronizar."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Some saved changes need review. Review them before synchronizing again."
+          }
+        }
+      }
+    },
     "invoicePool.title": {
       "extractionState": "manual",
       "localizations": {

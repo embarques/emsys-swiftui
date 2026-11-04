@@ -6,6 +6,7 @@ import Observation
 final class SynchronizationState {
     private(set) var isRunning = false
     private(set) var failed = false
+    private(set) var requiresReview = false
     private(set) var lastSucceededAt: Date?
     private(set) var lastFinishedAt: Date?
     private(set) var lastDownloadedAt: Date?
@@ -37,6 +38,7 @@ final class SynchronizationState {
         let uploadVersion = requestedUploadVersion
         isRunning = true
         failed = false
+        requiresReview = false
         do {
             try await operation()
             try Task.checkCancellation()
@@ -49,6 +51,15 @@ final class SynchronizationState {
         } catch {
             guard generation == currentGeneration else { return true }
             failed = true
+            switch error {
+            case InvoiceMutationUploader.UploadError.attentionRequired,
+                 InvoiceCreationUploader.UploadError.attentionRequired,
+                 InvoiceEditUploader.UploadError.attentionRequired,
+                 InvoiceAttachmentUploader.UploadError.attentionRequired,
+                 PickupCompletionUploader.UploadError.attentionRequired:
+                requiresReview = true
+            default: requiresReview = false
+            }
         }
         if generation == currentGeneration {
             lastFinishedAt = .now
@@ -62,6 +73,7 @@ final class SynchronizationState {
         generation = UUID()
         isRunning = false
         failed = false
+        requiresReview = false
         lastSucceededAt = nil
         lastFinishedAt = nil
         lastDownloadedAt = nil

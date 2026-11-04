@@ -3,6 +3,21 @@ import XCTest
 
 @MainActor
 final class SynchronizationStateTests: XCTestCase {
+    func testBlockedSavedWorkShowsReviewInsteadOfNetworkFailureAndClearsOnSuccess() async {
+        let state = SynchronizationState()
+        await state.synchronize { throw InvoiceMutationUploader.UploadError.attentionRequired }
+        XCTAssertTrue(state.failed)
+        XCTAssertTrue(state.requiresReview)
+        await state.synchronize { throw URLError(.timedOut) }
+        XCTAssertTrue(state.failed)
+        XCTAssertFalse(state.requiresReview)
+        await state.synchronize { throw PickupCompletionUploader.UploadError.attentionRequired }
+        XCTAssertTrue(state.requiresReview)
+        await state.synchronize { }
+        XCTAssertFalse(state.failed)
+        XCTAssertFalse(state.requiresReview)
+    }
+
     func testSuccessFailureAndRetryPreserveLastSuccessfulTime() async {
         let state = SynchronizationState()
         await state.synchronize {}

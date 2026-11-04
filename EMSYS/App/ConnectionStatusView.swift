@@ -20,7 +20,7 @@ struct ConnectionStatusView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(AppStyle.Spacing.small)
             } else if synchronization.failed, connection.status != .unavailable {
-                Label("sync.failed", systemImage: "exclamationmark.triangle")
+                Label(synchronization.requiresReview ? "sync.reviewRequired" : "sync.failed", systemImage: "exclamationmark.triangle")
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(AppStyle.Spacing.small)
             }
