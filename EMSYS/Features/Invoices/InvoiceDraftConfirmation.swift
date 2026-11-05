@@ -11,6 +11,7 @@ nonisolated struct InvoiceDraftConfirmation: Codable, Equatable, Sendable {
         var reviewed = content
         reviewed.confirmation = nil
         reviewed.senderSignature = nil
+        reviewed.senderSignatureCapturedAt = nil
         reviewed.wizardStep = nil
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]

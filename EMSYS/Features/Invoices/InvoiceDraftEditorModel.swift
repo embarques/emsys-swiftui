@@ -426,9 +426,15 @@ final class InvoiceDraftEditorModel: Identifiable {
               let hash = try? InvoiceDraftConfirmation.contextHash(for: content) else { return }
         var confirmation = currentConfirmation ?? InvoiceDraftConfirmation(
             contextHash: hash, policiesAgreed: false, skipSignature: true)
-        if currentConfirmation == nil { content.senderSignature = nil }
+        if currentConfirmation == nil {
+            content.senderSignature = nil
+            content.senderSignatureCapturedAt = nil
+        }
         update(&confirmation)
-        if confirmation.skipSignature { content.senderSignature = nil }
+        if confirmation.skipSignature {
+            content.senderSignature = nil
+            content.senderSignatureCapturedAt = nil
+        }
         content.confirmation = confirmation
     }
 
@@ -436,6 +442,7 @@ final class InvoiceDraftEditorModel: Identifiable {
         guard isAvailable, isLoaded, !isSaving, !isPreparingSignature,
               content.senderCustomer?.isValid == true,
               let hash = try? InvoiceDraftConfirmation.contextHash(for: content) else { return false }
+        let capturedAt = Date.now
         isPreparingSignature = true
         defer { isPreparingSignature = false }
         do {
@@ -449,6 +456,7 @@ final class InvoiceDraftEditorModel: Identifiable {
                 data: png.base64EncodedString(), contentType: "image/png")
             guard confirmation.isValid, signature.isValid else { return false }
             content.senderSignature = signature
+            content.senderSignatureCapturedAt = capturedAt
             content.confirmation = confirmation
             return true
         } catch { return false }

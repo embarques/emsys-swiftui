@@ -3,6 +3,7 @@ import SwiftUI
 struct InvoiceSignaturePreview: View {
     let png: Data
     let signerName: String
+    var capturedAt: Date? = nil
     var canEdit = true
     var edit: (() -> Void)?
 
@@ -31,6 +32,13 @@ struct InvoiceSignaturePreview: View {
                     Text("signature.signedBy").font(.caption).foregroundStyle(.secondary)
                     Text(signerName).font(.callout.weight(.medium))
                         .fixedSize(horizontal: false, vertical: true)
+                    if let capturedAt {
+                        Text("signature.capturedAt").font(.caption).foregroundStyle(.secondary)
+                        Text(capturedAt, format: .dateTime.year().month(.abbreviated).day()
+                            .hour().minute(.twoDigits).second(.twoDigits).timeZone(.specificName(.short)))
+                            .font(.caption).foregroundStyle(.secondary)
+                            .accessibilityIdentifier("signature-captured-at")
+                    }
                 }
                 .padding(16)
                 .frame(maxWidth: .infinity, alignment: .leading)

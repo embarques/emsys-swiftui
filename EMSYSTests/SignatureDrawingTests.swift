@@ -75,8 +75,15 @@ extension SignatureDrawingTests {
             .init(x: 0.34, y: 0.28), .init(x: 0.35, y: 0.57), .init(x: 0.46, y: 0.46),
             .init(x: 0.55, y: 0.55), .init(x: 0.69, y: 0.34), .init(x: 0.76, y: 0.57)
         ]])
-        let host = UIHostingController(rootView: AnyView(Text("invoiceCreation.title")
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        let host = UIHostingController(rootView: AnyView(ZStack {
+            Color(red: 1, green: 0, blue: 1).ignoresSafeArea()
+            VStack {
+                ForEach(0..<20) { _ in
+                    Text("INVOICE POLICY AND CREATE CONTROLS MUST STAY BEHIND THE POPUP")
+                        .font(.title.bold()).foregroundStyle(.green)
+                }
+            }
+        }.frame(maxWidth: .infinity, maxHeight: .infinity)
             .sheet(isPresented: .constant(true)) {
                 InvoiceSenderSignatureView(model: model, drawing: drawing)
             }
@@ -102,6 +109,10 @@ extension SignatureDrawingTests {
             let image = UIGraphicsImageRenderer(bounds: window.bounds).image { _ in
                 window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
             }
+            let presented = try XCTUnwrap(host.presentedViewController)
+            let sample = presented.view.convert(
+                CGPoint(x: 4, y: presented.view.bounds.midY), to: window)
+            assertOpaqueSignatureSurface(image, at: sample)
             let appearance = dark ? "dark" : "light"
             try XCTUnwrap(image.pngData()).write(to: FileManager.default.temporaryDirectory
                 .appending(path: "emsys-sender-signature-\(device)-\(appearance).png"))
@@ -128,7 +139,8 @@ extension SignatureDrawingTests {
         // Previewing a saved image must never apply a replacement to the draft.
         let png = try await drawing.pngData()
         host.rootView = AnyView(ScrollView {
-            InvoiceSignaturePreview(png: png, signerName: model.content.senderName, edit: {})
+            InvoiceSignaturePreview(png: png, signerName: model.content.senderName,
+                capturedAt: Date(timeIntervalSince1970: 1_793_858_400), edit: {})
                 .padding(24)
         }.environment(\.locale, Locale(identifier: "es-DO")))
         for dark in [false, true] {
@@ -145,6 +157,31 @@ extension SignatureDrawingTests {
         }
         XCTAssertNil(model.currentSenderSignature, "Viewing or dismissing a drawing must not confirm it")
         XCTAssertEqual(drawing.strokes.count, 1)
+    }
+
+    private func assertOpaqueSignatureSurface(_ image: UIImage, at point: CGPoint,
+                                             file: StaticString = #filePath, line: UInt = #line) {
+        guard let source = image.cgImage else {
+            XCTFail("Missing rendered popup image", file: file, line: line)
+            return
+        }
+        var pixel = [UInt8](repeating: 0, count: 4)
+        let rendered = pixel.withUnsafeMutableBytes { bytes -> Bool in
+            guard let context = CGContext(
+                data: bytes.baseAddress, width: 1, height: 1, bitsPerComponent: 8,
+                bytesPerRow: 4, space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            ) else { return false }
+            let x = floor(point.x * image.scale)
+            let y = floor(point.y * image.scale)
+            context.translateBy(x: -x, y: -(CGFloat(source.height) - y - 1))
+            context.draw(source, in: CGRect(x: 0, y: 0, width: source.width, height: source.height))
+            return true
+        }
+        XCTAssertTrue(rendered, file: file, line: line)
+        // A neutral opaque surface must not inherit the magenta invoice underlay.
+        XCTAssertLessThan(abs(Int(pixel[0]) - Int(pixel[1])), 12, file: file, line: line)
+        XCTAssertLessThan(abs(Int(pixel[2]) - Int(pixel[1])), 12, file: file, line: line)
     }
 }
 #endif
@@ -167,7 +204,8 @@ extension SignatureDrawingTests {
             name: "capture", dark: false)
         let png = try await drawing.pngData()
         for dark in [false, true] {
-            try await captureMacSignature(AnyView(InvoiceSignaturePreview(png: png, signerName: model.content.senderName, edit: {})
+            try await captureMacSignature(AnyView(InvoiceSignaturePreview(png: png, signerName: model.content.senderName,
+                capturedAt: Date(timeIntervalSince1970: 1_793_858_400), edit: {})
                 .padding(24)), name: dark ? "preview-dark" : "preview-light", dark: dark)
         }
         XCTAssertNil(model.currentSenderSignature)

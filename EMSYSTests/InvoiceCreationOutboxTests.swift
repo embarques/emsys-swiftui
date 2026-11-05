@@ -462,6 +462,7 @@ final class InvoiceCreationOutboxTests: XCTestCase {
         content.confirmation = InvoiceDraftConfirmation(contextHash: try InvoiceDraftConfirmation.contextHash(for: content),
             policiesAgreed: true, skipSignature: false)
         content.senderSignature = InvoiceSenderSignature(signerName: content.senderName, data: png.base64EncodedString(), contentType: "image/png")
+        content.senderSignatureCapturedAt = Date(timeIntervalSince1970: 1_793_858_400)
         let plan = try InvoiceCreationPlan(content: content, branch: original.branch)
         let operation = try await store.queueInvoiceCreation(draftID: UUID(), expectedRevision: nil, plan: plan)
         let envelope = try XCTUnwrap(JSONSerialization.jsonObject(with: XCTUnwrap(operation.invoiceRequest)) as? [String: Any])
@@ -469,6 +470,9 @@ final class InvoiceCreationOutboxTests: XCTestCase {
         let signature = try XCTUnwrap(request["senderSignature"] as? [String: Any])
         XCTAssertEqual(signature["data"] as? String, png.base64EncodedString())
         XCTAssertEqual(signature["contentType"] as? String, "image/png")
+        XCTAssertNil(request["senderSignatureCapturedAt"], "Local capture metadata must not change the API request")
+        XCTAssertNil(signature["capturedAt"])
+        XCTAssertNil(signature["signedAt"])
         let contentJSON = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(content)) as? [String: Any])
         XCTAssertEqual((contentJSON["senderSignature"] as? [String: Any])?["data"] as? String, png.base64EncodedString())
         XCTAssertNil((contentJSON["confirmation"] as? [String: Any])?["signaturePNG"])

@@ -31,19 +31,25 @@ final class InvoiceDraftConfirmationTests: XCTestCase {
         model.content.policies = []
         model.setPoliciesAgreed(true)
         let drawing = SignatureDrawing(strokes: [[.init(x: 0.1, y: 0.1), .init(x: 0.8, y: 0.8)]])
+        let captureStarted = Date.now
         let captured = await model.captureSignature(drawing)
         XCTAssertTrue(captured)
+        let capturedAt = try XCTUnwrap(model.content.senderSignatureCapturedAt)
+        XCTAssertGreaterThanOrEqual(capturedAt, captureStarted)
+        XCTAssertLessThanOrEqual(capturedAt, Date.now)
         let png = try XCTUnwrap(model.currentSenderSignature?.pngData)
         await model.save()
         let summaries = try await store.draftSummaries()
         let restored = InvoiceDraftEditorModel(draftID: try XCTUnwrap(summaries.first?.id), store: store, isAuthorized: { true })
         await restored.load()
         XCTAssertEqual(restored.currentSenderSignature?.pngData, png)
+        XCTAssertEqual(restored.content.senderSignatureCapturedAt, capturedAt)
         XCTAssertEqual(restored.currentConfirmation?.policiesAgreed, true)
         restored.content.items[0].total = "15"
         XCTAssertNil(restored.currentConfirmation)
         restored.setSkipSignature(false)
         XCTAssertNil(restored.currentSenderSignature?.pngData)
+        XCTAssertNil(restored.content.senderSignatureCapturedAt)
         XCTAssertEqual(restored.currentConfirmation?.policiesAgreed, false)
     }
 
@@ -61,6 +67,7 @@ final class InvoiceDraftConfirmationTests: XCTestCase {
         legacy["confirmation"] = confirmation
         let restored = try JSONDecoder().decode(InvoiceDraft.Content.self, from: JSONSerialization.data(withJSONObject: legacy))
         XCTAssertEqual(restored.senderSignature?.signerName, "Legacy Sender")
+        XCTAssertNil(restored.senderSignatureCapturedAt, "Do not invent a capture time for older signatures")
         XCTAssertEqual(restored.senderSignature?.data, png.base64EncodedString())
         XCTAssertEqual(restored.senderSignature?.contentType, "image/png")
         XCTAssertEqual(restored.senderSignature?.pngData, png)

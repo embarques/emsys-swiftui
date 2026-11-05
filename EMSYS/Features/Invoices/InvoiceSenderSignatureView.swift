@@ -40,16 +40,29 @@ struct InvoiceSenderSignatureView: View {
                 .padding(padding)
                 .frame(maxWidth: 1000)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(AppStyle.Colors.surface)
+                .background(popupBackground)
             }
         }
+        .background(popupBackground.ignoresSafeArea())
         .interactiveDismissDisabled(model.isPreparingSignature)
         #if os(iOS)
+        .presentationBackground(popupBackground)
+        .presentationBackgroundInteraction(.disabled)
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
         .presentationCompactAdaptation(.fullScreenCover)
         #elseif os(macOS)
         .frame(minWidth: 520, minHeight: 500)
+        #endif
+    }
+
+    // Signature capture owns an opaque surface; translucent app surfaces expose
+    // the invoice's policy text and controls through adaptive sheet presentations.
+    private var popupBackground: Color {
+        #if os(macOS)
+        Color(nsColor: .windowBackgroundColor)
+        #else
+        Color(uiColor: .systemBackground)
         #endif
     }
 
