@@ -31,6 +31,22 @@ final class SignatureDrawingTests: XCTestCase {
         await assertRejected(drawing, width: -1, height: 100)
     }
 
+    func testSignatureCanvasFitsPortraitAndCompactLandscapeWithoutFooterCrowding() {
+        let portrait = CGSize(width: 390, height: 650)
+        let landscape = CGSize(width: 760, height: 250)
+        let portraitHeight = InvoiceSenderSignatureView.canvasHeight(
+            in: portrait, compact: false, padding: 24, accessibility: false)
+        let landscapeHeight = InvoiceSenderSignatureView.canvasHeight(
+            in: landscape, compact: true, padding: 12, accessibility: false)
+        XCTAssertGreaterThan(portraitHeight, 200)
+        XCTAssertGreaterThanOrEqual(landscapeHeight, 150)
+        XCTAssertLessThanOrEqual(landscapeHeight + 90, landscape.height)
+        let accessibleHeight = InvoiceSenderSignatureView.canvasHeight(
+            in: CGSize(width: 600, height: 650), compact: false, padding: 24, accessibility: true)
+        XCTAssertGreaterThanOrEqual(accessibleHeight, 100)
+        XCTAssertLessThanOrEqual(accessibleHeight + 300, 650)
+    }
+
     private func assertRejected(_ drawing: SignatureDrawing, width: Int = 1024, height: Int = 384) async {
         do {
             _ = try await drawing.pngData(width: width, height: height)
@@ -91,6 +107,24 @@ extension SignatureDrawingTests {
                 .appending(path: "emsys-sender-signature-\(device)-\(appearance).png"))
         }
         host.dismiss(animated: false)
+        let landscapeHost = UIHostingController(rootView: AnyView(
+            InvoiceSenderSignatureView(model: model, drawing: drawing)
+                .environment(\.locale, Locale(identifier: "es-DO"))))
+        landscapeHost.safeAreaRegions = []
+        let landscapeWindow = UIWindow(windowScene: scene)
+        landscapeWindow.frame = CGRect(x: 0, y: 0, width: 760, height: 300)
+        landscapeWindow.rootViewController = landscapeHost
+        landscapeWindow.makeKeyAndVisible()
+        try await Task.sleep(for: .milliseconds(300))
+        landscapeWindow.layoutIfNeeded()
+        let landscape = UIGraphicsImageRenderer(bounds: landscapeWindow.bounds).image { _ in
+            landscapeWindow.drawHierarchy(in: landscapeWindow.bounds, afterScreenUpdates: true)
+        }
+        try XCTUnwrap(landscape.pngData()).write(to: FileManager.default.temporaryDirectory
+            .appending(path: "emsys-sender-signature-\(device)-landscape.png"))
+        landscapeWindow.isHidden = true
+        window.makeKeyAndVisible()
+        XCTAssertNil(model.currentSenderSignature, "Rotation/layout must not apply a signature")
         // Previewing a saved image must never apply a replacement to the draft.
         let png = try await drawing.pngData()
         host.rootView = AnyView(ScrollView {

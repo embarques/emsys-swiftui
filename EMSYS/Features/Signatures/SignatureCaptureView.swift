@@ -5,6 +5,38 @@ struct SignatureCaptureView: View {
     @State private var currentStroke: [SignatureDrawing.Point] = []
 
     var body: some View {
+        captureSurface
+        .background(Color(white: 0.96))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(.gray.opacity(0.5)))
+        .overlay(alignment: .bottom) {
+            VStack(spacing: 6) {
+                SignatureGuideLine()
+                    .stroke(.black.opacity(0.25), style: StrokeStyle(lineWidth: 1, dash: [5]))
+                    .frame(height: 1)
+                Text("signature.signAbove")
+                    .font(.caption)
+                    .foregroundStyle(.gray)
+            }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 8)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
+        .accessibilityHint("signature.instructions")
+        .onChange(of: drawing.isEmpty) {
+            if drawing.isEmpty { currentStroke = [] }
+        }
+        .onDisappear { currentStroke = [] }
+    }
+
+    @ViewBuilder
+    private var captureSurface: some View {
+        #if os(iOS)
+        NativeSignatureCaptureView(drawing: $drawing)
+            .accessibilityLabel("signature.canvas")
+            .accessibilityValue(drawing.isEmpty ? Text("signature.empty") : Text("signature.captured"))
+        #else
         GeometryReader { geometry in
             Canvas { context, size in
                 for stroke in drawing.strokes + [currentStroke] {
@@ -37,26 +69,17 @@ struct SignatureCaptureView: View {
                     currentStroke = []
                 }
             )
+            .onChange(of: geometry.size) {
+                if !currentStroke.isEmpty {
+                    drawing.strokes.append(currentStroke)
+                    currentStroke = []
+                }
+            }
             .accessibilityElement()
             .accessibilityLabel("signature.canvas")
             .accessibilityValue(drawing.isEmpty ? Text("signature.empty") : Text("signature.captured"))
         }
-        .background(Color(white: 0.96))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(.gray.opacity(0.5)))
-        .overlay(alignment: .bottom) {
-            SignatureGuideLine().stroke(.black.opacity(0.25), lineWidth: 1)
-                .frame(height: 1)
-                .padding(.horizontal, 20)
-                .padding(.bottom, 20)
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
-        }
-        .accessibilityHint("signature.instructions")
-        .onChange(of: drawing.isEmpty) {
-            if drawing.isEmpty { currentStroke = [] }
-        }
-        .onDisappear { currentStroke = [] }
+        #endif
     }
 
     private func point(_ location: CGPoint, in size: CGSize) -> SignatureDrawing.Point {
