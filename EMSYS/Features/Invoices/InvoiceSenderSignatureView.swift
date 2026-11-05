@@ -2,6 +2,7 @@ import SwiftUI
 
 struct InvoiceSenderSignatureView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let model: InvoiceDraftEditorModel
     @State private var drawing = SignatureDrawing()
     @State private var failed = false
@@ -13,93 +14,97 @@ struct InvoiceSenderSignatureView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Text("signature.createTitle")
-                .font(.title2.bold())
-                .frame(maxWidth: 800, alignment: .leading)
-                .padding(.horizontal, 24)
-                .padding(.vertical, 20)
-                .frame(maxWidth: .infinity)
-                .accessibilityAddTraits(.isHeader)
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("signature.signingAs").font(.subheadline).foregroundStyle(.secondary)
-                        Text(model.content.senderName).font(.headline)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    HStack {
-                        Spacer(minLength: 0)
-                        Button("signature.clear") { drawing = SignatureDrawing(); failed = false }
-                            .buttonStyle(.borderless)
-                            .frame(minWidth: 44, minHeight: 44)
-                            .disabled(drawing.isEmpty || model.isPreparingSignature)
-                            .accessibilityIdentifier("signature-clear")
-                    }
-                    VStack(spacing: 10) {
-                        SignatureCaptureView(drawing: $drawing)
-                            .aspectRatio(SignatureDrawing.aspectRatio, contentMode: .fit)
-                            .disabled(model.isPreparingSignature)
-                        Text("signature.signAbove").font(.subheadline).foregroundStyle(.secondary)
-                    }
-                    Text("signature.applyNotice")
-                        .font(.callout).foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.top, 8)
-                    if failed {
-                        Text("invoiceCreation.signatureError").foregroundStyle(.red)
-                            .accessibilityIdentifier("signature-error")
-                    }
-                }
-                .frame(maxWidth: 800)
-                .padding(.horizontal, 24)
-                .padding(.bottom, 24)
-                .frame(maxWidth: .infinity, alignment: .top)
-            }
-            .scrollBounceBehavior(.basedOnSize)
+            captureHeader
             Divider()
-            captureActions
+            GeometryReader { geometry in
+                let compact = geometry.size.height < 360
+                let padding: CGFloat = compact ? 12 : 24
+                VStack(spacing: compact ? 8 : 20) {
+                    Spacer(minLength: 0)
+                    Text(model.content.senderName)
+                        .font(compact ? .headline : .title2.bold())
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                    if !compact {
+                        Text("signature.instructions").font(.callout).foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    SignatureCaptureView(drawing: $drawing)
+                        .accessibilityIdentifier("signature-canvas")
+                        .frame(height: Self.canvasHeight(in: geometry.size, compact: compact, padding: padding, accessibility: dynamicTypeSize.isAccessibilitySize))
+                        .disabled(model.isPreparingSignature)
+                    if failed { Text("invoiceCreation.signatureError").foregroundStyle(.red) }
+                    if model.isPreparingSignature { ProgressView() }
+                    Spacer(minLength: 0)
+                }
+                .padding(padding)
+                .frame(maxWidth: 1000)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(AppStyle.Colors.surface)
+            }
         }
-        .background(.background)
         .interactiveDismissDisabled(model.isPreparingSignature)
         #if os(iOS)
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
+        .presentationCompactAdaptation(.fullScreenCover)
         #elseif os(macOS)
-        .frame(minWidth: 520, minHeight: 600)
+        .frame(minWidth: 520, minHeight: 500)
         #endif
     }
 
-    private var captureActions: some View {
-        VStack(spacing: 12) {
-            Button {
-                Task {
-                    if await model.captureSignature(drawing) { dismiss() } else { failed = true }
-                }
-            } label: {
-                HStack {
-                    if model.isPreparingSignature { ProgressView().controlSize(.small) }
-                    Text("signature.apply")
-                }
-                .frame(maxWidth: .infinity, minHeight: 28)
+    // An explicit header keeps these controls above the paper on every device,
+    // including systems that relocate automatic toolbars to a floating side rail.
+    private var captureHeader: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if dynamicTypeSize.isAccessibilitySize {
+                captureTitle
             }
-            .buttonStyle(.borderedProminent)
-            .disabled(drawing.isEmpty || model.isPreparingSignature || !model.isAvailable)
-            .keyboardShortcut(.defaultAction)
-            .accessibilityIdentifier("signature-confirm")
-
-            Button { dismiss() } label: {
-                Text("invoiceEdits.cancel").frame(maxWidth: .infinity, minHeight: 28)
+            HStack(spacing: 12) {
+                Button { dismiss() } label: { Label("invoiceEdits.cancel", systemImage: "xmark") }
+                    .tint(.red)
+                    .disabled(model.isPreparingSignature)
+                    .keyboardShortcut(.cancelAction)
+                    .accessibilityIdentifier("signature-cancel")
+                if dynamicTypeSize.isAccessibilitySize {
+                    Spacer(minLength: 0)
+                } else {
+                    captureTitle.frame(maxWidth: .infinity, alignment: .leading)
+                }
+                Button { drawing = SignatureDrawing(); failed = false } label: {
+                    Label("signature.clear", systemImage: "trash")
+                }
+                .tint(.orange)
+                .disabled(drawing.isEmpty || model.isPreparingSignature)
+                .accessibilityIdentifier("signature-clear")
+                Button {
+                    Task {
+                        if await model.captureSignature(drawing) { dismiss() } else { failed = true }
+                    }
+                } label: { Label("invoiceCreation.useSignature", systemImage: "checkmark") }
+                    .tint(.green)
+                    .disabled(drawing.isEmpty || model.isPreparingSignature || !model.isAvailable)
+                    .keyboardShortcut(.defaultAction)
+                    .accessibilityIdentifier("signature-confirm")
             }
-            .buttonStyle(.bordered)
-            .disabled(model.isPreparingSignature)
-            .keyboardShortcut(.cancelAction)
-            .accessibilityIdentifier("signature-cancel")
         }
+        .labelStyle(.iconOnly)
+        .buttonStyle(.bordered)
         .controlSize(.large)
-        .buttonBorderShape(.roundedRectangle(radius: AppStyle.Layout.cornerRadius))
-        .font(.headline)
-        .frame(maxWidth: 800)
-        .padding(16)
-        .frame(maxWidth: .infinity)
+        .padding(12)
+        .background(.background)
+    }
+
+    private var captureTitle: some View {
+        Text("signature.createTitle")
+            .font(.headline)
+            .accessibilityAddTraits(.isHeader)
+    }
+
+    static func canvasHeight(in size: CGSize, compact: Bool, padding: CGFloat, accessibility: Bool) -> CGFloat {
+        let width = min(1000, size.width) - padding * 2
+        let preferred = min(360, max(140, width * 0.625))
+        let textSpace: CGFloat = compact ? 90 : (accessibility ? 300 : 200)
+        return min(preferred, max(100, size.height - textSpace))
     }
 }
