@@ -7603,6 +7603,13 @@
         }
       }
     },
+    "signature.capturedAt": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Captured on" } },
+        "es-DO": { "stringUnit": { "state": "translated", "value": "Capturada el" } }
+      }
+    },
     "signature.signingAs": {
       "extractionState": "manual",
       "localizations": {

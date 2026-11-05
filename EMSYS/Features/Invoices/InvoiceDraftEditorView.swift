@@ -293,6 +293,7 @@ struct InvoiceDraftEditorView: View {
             if model.currentConfirmation?.skipSignature == false {
                 if let signature = model.currentSenderSignature, let png = signature.pngData {
                     InvoiceSignaturePreview(png: png, signerName: signature.signerName,
+                        capturedAt: model.content.senderSignatureCapturedAt,
                         canEdit: model.content.senderCustomer?.isValid == true && !model.isSaving,
                         edit: { showsSignature = true })
                 } else {

@@ -7,6 +7,7 @@ nonisolated struct InvoiceDraft: Identifiable, Sendable {
         var pickup: InvoicePickupReference?
         var attachments: [InvoiceAttachment]?
         var senderSignature: InvoiceSenderSignature?
+        var senderSignatureCapturedAt: Date?
         var confirmation: InvoiceDraftConfirmation?
         var wizardStep: InvoiceCreationStep?
         var date = InvoiceDate(date: .now)
@@ -31,7 +32,7 @@ nonisolated struct InvoiceDraft: Identifiable, Sendable {
         init() { }
 
         private enum CodingKeys: String, CodingKey {
-            case assignedPickup, pickup, attachments, senderSignature, confirmation, wizardStep
+            case assignedPickup, pickup, attachments, senderSignature, senderSignatureCapturedAt, confirmation, wizardStep
             case senderWriteSnapshot, receiverWriteSnapshot, senderCustomer, receiverCustomer
             case senderAddressID, receiverAddressID, policies, container, pickupSource
             case pickupRoute, pickupEmployee, payment, paymentRegion, paymentReview
@@ -44,6 +45,7 @@ nonisolated struct InvoiceDraft: Identifiable, Sendable {
             pickup = try fields.decodeIfPresent(InvoicePickupReference.self, forKey: .pickup)
             attachments = try fields.decodeIfPresent([InvoiceAttachment].self, forKey: .attachments)
             senderSignature = try fields.decodeIfPresent(InvoiceSenderSignature.self, forKey: .senderSignature)
+            senderSignatureCapturedAt = try fields.decodeIfPresent(Date.self, forKey: .senderSignatureCapturedAt)
             confirmation = try fields.decodeIfPresent(InvoiceDraftConfirmation.self, forKey: .confirmation)
             wizardStep = try fields.decodeIfPresent(InvoiceCreationStep.self, forKey: .wizardStep)
             senderWriteSnapshot = try fields.decodeIfPresent(InvoiceCustomerWriteSnapshot.self, forKey: .senderWriteSnapshot)
