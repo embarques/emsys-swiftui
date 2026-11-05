@@ -18,7 +18,7 @@ Create `EMSYS main TestFlight` for `embarques/emsys-swiftui`:
   must not trigger distribution.
 - Project: `EMSYS.xcodeproj`; scheme: `EMSYS`.
 - Select a cloud Xcode version compatible with the project. It currently uses
-  Xcode 27.1 locally and targets iOS 27.0; confirm cloud availability rather than
+  Xcode 27.1 locally and targets iOS 26.6; confirm cloud availability rather than
   changing the deployment target or signing to work around unavailable tooling.
 - Add Test actions for iPhone, iPad, and macOS using eligible cloud destinations.
 - Add an iOS Archive action, Release configuration, with TestFlight distribution.

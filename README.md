@@ -75,7 +75,7 @@ and remaining acceptance items.
 
 Open `EMSYS.xcodeproj` and select the shared `EMSYS` scheme. Build and run on
 macOS, an iPhone simulator, and an iPad simulator. Run the test action for the
-complete regression suite. Existing minimum OS versions are iOS/iPadOS 27.0 and macOS 26.6.
+complete regression suite. Minimum OS versions are iOS/iPadOS 26.6 and macOS 26.6.
 
 Manual acceptance checks:
 
