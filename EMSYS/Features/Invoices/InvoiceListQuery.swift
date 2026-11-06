@@ -2,7 +2,7 @@ import Foundation
 
 nonisolated struct InvoiceListQuery: Equatable, Sendable {
     enum Scope: String, CaseIterable, Identifiable, Sendable {
-        case all, due, paid, incomplete
+        case all, due, paid, incomplete, unsynced
         var id: Self { self }
         var title: String { "invoiceList.\(rawValue)" }
     }
@@ -59,7 +59,7 @@ nonisolated struct InvoiceListQuery: Equatable, Sendable {
             }))
         }
         switch scope {
-        case .all: break
+        case .all, .unsynced: break
         case .due: filters.append(Filter(field: "balance", operator: "gt", value: .number(0), filters: nil))
         case .paid: filters.append(.leaf("paidStatus", "eq", "CLOSED"))
         case .incomplete: filters.append(.leaf("registration", "eq", "PENDING"))

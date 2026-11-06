@@ -35,7 +35,8 @@ struct InvoiceListView: View {
     var body: some View {
         ZStack {
             if let model {
-                InvoiceDirectoryView(query: $query, invoices: model.invoices,
+                InvoiceDirectoryView(query: $query, invoices: model.invoices, localEntries: model.localEntries,
+                    openLocal: { creation = draftListModel(model).editor(draftID: $0.draftID) },
                     outstandingBalance: model.outstandingBalance, isLoading: model.isLoading,
                     isDownloaded: model.isShowingDownloaded, hasMore: model.hasMore, issue: model.issue,
                     showFilters: { sheet = .filters }, open: { selectedInvoiceID = $0.id },
@@ -88,11 +89,14 @@ struct InvoiceListView: View {
             }
         }
         .modifier(InvoicePreviewModifier(preview: preview))
-        .modifier(InvoiceCreationPresentation(editor: $creation, onDismiss: { Task { await model?.refreshInvoicePoolSummary() } }))
+        .modifier(InvoiceCreationPresentation(editor: $creation, onDismiss: {
+            model?.request(query: query, online: online)
+            Task { await model?.refreshInvoicePoolSummary() }
+        }))
         .onChange(of: session.contextID) { preview.cancel() }
         .navigationTitle(preferences.language.localizedString("navigation.invoices"))
         .navigationDestination(item: $selectedInvoiceID) { id in
-            if let model, let invoice = model.invoices.first(where: { $0.id == id }) {
+            if let model, let invoice = (model.localEntries.compactMap(\.invoice) + model.invoices).first(where: { $0.id == id }) {
                 InvoiceDetailView(model: model.detail(for: invoice))
             }
         }
