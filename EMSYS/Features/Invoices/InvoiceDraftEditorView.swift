@@ -187,7 +187,7 @@ struct InvoiceDraftEditorView: View {
                 VStack(alignment: .leading, spacing: AppStyle.Spacing.small) {
                     Label("invoiceCreation.number", systemImage: "doc.text")
                         .font(.subheadline).foregroundStyle(.secondary)
-                    Text("invoiceCreation.automaticNumber").font(.headline)
+                    Text(verbatim: model.nextInvoiceNumber ?? "—").font(.headline).monospacedDigit()
                 }
                 .padding(.vertical, 8)
         }
@@ -307,6 +307,11 @@ struct InvoiceDraftEditorView: View {
     private var reviewSummary: some View {
         Section("invoiceCreation.step.review") {
             LabeledContent("drafts.date", value: model.content.date.apiValue)
+            if let number = model.nextInvoiceNumber {
+                LabeledContent("invoiceCreation.number") {
+                    Text(verbatim: number).monospacedDigit()
+                }
+            }
             LabeledContent("invoices.sender", value: model.content.senderName)
             if !model.content.receiverName.isEmpty {
                 LabeledContent("invoices.receiver", value: model.content.receiverName)

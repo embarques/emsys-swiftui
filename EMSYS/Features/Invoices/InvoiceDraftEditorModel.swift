@@ -144,13 +144,14 @@ final class InvoiceDraftEditorModel: Identifiable {
     private(set) var didQueueCreation = false
     private(set) var poolThreshold = 10
     private(set) var availableReservations = 0
+    private(set) var nextInvoiceNumber: String?
     var canQueueCreation: Bool {
-        isAvailable && availableReservations > 0 && financialPermission(.createInvoice) && creation == nil && isLoaded
+        isAvailable && nextInvoiceNumber != nil && financialPermission(.createInvoice) && creation == nil && isLoaded
             && !isSaving && !isLoading && !isPreparingSignature && !isLoadingCustomerDetails && !isLoadingPolicies
     }
 
     func queueCreation() async {
-        guard canQueueCreation else { return }
+        guard canQueueCreation, let nextInvoiceNumber else { return }
         for step in InvoiceCreationStep.allCases {
             if let issue = validationIssue(for: step) {
                 content.wizardStep = step
@@ -178,15 +179,21 @@ final class InvoiceDraftEditorModel: Identifiable {
         defer { isSaving = false }
         do {
             let plan = try InvoiceCreationPlan(content: content, branch: branch)
-            let operation = try await store.queueInvoiceCreation(draftID: draftID, expectedRevision: expectedRevision, plan: plan)
+            let operation = try await store.queueInvoiceCreation(draftID: draftID, expectedRevision: expectedRevision, plan: plan,
+                expectedNumber: nextInvoiceNumber)
             guard isAvailable else { return }
             creation = operation
             createdInvoiceNumber = operation.plan.reservation?.number
             availableReservations = max(0, availableReservations - 1)
+            self.nextInvoiceNumber = nil
             original = content
             didQueueCreation = true
         } catch InvoiceStore.StoreError.invoicePoolEmpty {
-            if isAvailable { availableReservations = 0; issue = "invoicePool.empty" }
+            if isAvailable { availableReservations = 0; self.nextInvoiceNumber = nil; issue = "invoicePool.empty" }
+        } catch InvoiceStore.StoreError.invoiceNumberPreviewChanged {
+            if await refreshInvoiceNumberAvailability() {
+                issue = self.nextInvoiceNumber == nil ? "invoicePool.empty" : "invoicePool.numberChanged"
+            }
         } catch InvoiceStore.StoreError.draftChanged {
             if isAvailable { hasConflict = true; issue = "drafts.changed" }
         } catch InvoiceCreationPlan.PlanError.changedReview {
@@ -702,16 +709,28 @@ final class InvoiceDraftEditorModel: Identifiable {
         }
     }
 
-    func load() async {
-        guard isAuthorized() else { return }
+    @discardableResult
+    private func refreshInvoiceNumberAvailability() async -> Bool {
+        guard isAuthorized() else { return false }
         do {
-            availableReservations = try await store.availableInvoiceReservationCount()
-            poolThreshold = try await store.invoicePoolThreshold()
+            let threshold = try await store.invoicePoolThreshold()
+            let availability = try await store.invoiceNumberAvailability()
+            guard isAuthorized(), !Task.isCancelled else { return false }
+            availableReservations = availability.count
+            nextInvoiceNumber = availability.nextNumber
+            poolThreshold = threshold
+            return true
         } catch {
+            guard isAuthorized(), !Task.isCancelled else { return false }
             availableReservations = 0
-            if isAuthorized() { issue = "invoicePool.loadError" }
-            return
+            nextInvoiceNumber = nil
+            issue = "invoicePool.loadError"
+            return false
         }
+    }
+
+    func load() async {
+        guard await refreshInvoiceNumberAvailability() else { return }
         guard !isLoaded, !isLoading else { return }
         isLoading = true
         issue = nil
