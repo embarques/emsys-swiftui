@@ -412,6 +412,39 @@ final class InvoiceCreationOutboxTests: XCTestCase {
         XCTAssertEqual(attachments.first?.invoiceID, unassigned.id)
     }
 
+    func testStaleNumberPreviewRequiresConfirmationBeforeUsingTheNextReservation() async throws {
+        let directory = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try await open(directory)
+        let first = try await store.availableInvoiceReservations()
+        let reservation = try XCTUnwrap(first.first)
+        let replacement = InvoiceReservation(id: "ffffffffffffffffffffffff", number: "INV-NEXT",
+            allocation: reservation.allocation)
+        try await store.reconcileInvoiceReservations([replacement, reservation], lowThreshold: 10)
+
+        let plan = try makePlan()
+        let editor = InvoiceDraftEditorModel(initialContent: plan.content, store: store,
+            currentBranchID: { 1 }, financialPermission: { $0 == .createInvoice }, isAuthorized: { true })
+        await editor.load()
+        XCTAssertEqual(editor.nextInvoiceNumber, reservation.number)
+        XCTAssertEqual(editor.availableReservations, 2)
+        let used = try await store.queueInvoiceCreation(draftID: UUID(), expectedRevision: nil, plan: plan)
+        XCTAssertEqual(used.plan.reservation?.number, reservation.number)
+
+        editor.setSkipSignature(true)
+        await editor.queueCreation()
+        XCTAssertNil(editor.creation)
+        XCTAssertEqual(editor.issue, "invoicePool.numberChanged")
+        XCTAssertEqual(editor.nextInvoiceNumber, replacement.number)
+        XCTAssertEqual(editor.availableReservations, 1)
+
+        await editor.queueCreation()
+        XCTAssertEqual(editor.creation?.plan.reservation?.number, replacement.number)
+        let remaining = try await store.invoiceNumberAvailability()
+        XCTAssertEqual(remaining.count, 0)
+        XCTAssertNil(remaining.nextNumber)
+    }
+
     func testPaymentCaptureQueuesWithoutCuadreAccessAndUsesAuthenticatedBranch() async throws {
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -422,6 +455,7 @@ final class InvoiceCreationOutboxTests: XCTestCase {
         await editor.load()
         XCTAssertNil(editor.content.paymentReview)
         XCTAssertNil(editor.validationIssue(for: .payment))
+        editor.setSkipSignature(true)
         await editor.queueCreation()
         XCTAssertTrue(editor.didQueueCreation)
         let operation = try XCTUnwrap(editor.creation)

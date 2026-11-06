@@ -69,6 +69,23 @@
         }
       }
     },
+    "invoicePool.numberChanged": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cambió el número reservado. Revisa el nuevo número y vuelve a confirmar."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The reserved number changed. Review the new number and confirm again."
+          }
+        }
+      }
+    },
     "invoicePool.low": {
       "extractionState": "manual",
       "localizations": {
@@ -2277,6 +2294,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Atrás"
+          }
+        }
+      }
+    },
+    "invoiceCreation.signatureRequired": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Captura la firma del remitente o elige omitirla."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Capture the sender’s signature or choose to skip it."
           }
         }
       }

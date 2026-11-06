@@ -29,13 +29,17 @@ final class InvoiceWizardLayoutTests: XCTestCase {
         let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = try await InvoiceStore.open(directory: directory, userID: "fixture", companyID: "fixture")
+        let deviceID = try await store.invoicePoolDeviceID()
+        let reserved = InvoiceReservation(id: "507f1f77bcf86cd799439013", number: "NY-10452",
+            allocation: .init(userId: 12, token: UUID().uuidString, deviceId: deviceID.uuidString))
+        try await store.reconcileInvoiceReservations([reserved], lowThreshold: 10)
         let customer = try JSONDecoder().decode(InvoiceCustomer.self, from: Data("""
             {"id":"507f1f77bcf86cd799439011","name":"Alejandra García Hernández","customerType":1,
              "phones":[{"number":"809-555-0100"}],
              "addresses":[{"id":"507f1f77bcf86cd799439012","address1":"Calle Principal 123, apartamento 4","city":"Santo Domingo"}]}
             """.utf8))
         var content = InvoiceDraft.Content()
-        content.wizardStep = .customers
+        content.wizardStep = .details
         content.senderName = customer.name
         content.senderCustomer = customer
         content.senderAddressID = customer.addresses?.first?.id
@@ -55,6 +59,11 @@ final class InvoiceWizardLayoutTests: XCTestCase {
         window.makeKeyAndVisible()
         defer { window.isHidden = true; previous?.makeKey() }
         try await Task.sleep(for: .milliseconds(600))
+        XCTAssertEqual(model.nextInvoiceNumber, reserved.number)
+        try capture(window, name: "reserved-number")
+        model.continueCreation()
+        XCTAssertEqual(model.step, .customers)
+        try await Task.sleep(for: .milliseconds(500))
         try capture(window, name: "customers")
         model.continueCreation()
         XCTAssertEqual(model.step, .items)
@@ -70,6 +79,15 @@ final class InvoiceWizardLayoutTests: XCTestCase {
         try capture(window, name: "items-accessible")
         XCTAssertLessThanOrEqual(scroll.contentSize.width, scroll.bounds.width + 1)
         XCTAssertEqual(model.content.senderAddressID, customer.addresses?.first?.id)
+        host.traitOverrides.preferredContentSizeCategory = .large
+        model.content.wizardStep = .review
+        XCTAssertFalse(model.skipsSignature)
+        try await Task.sleep(for: .milliseconds(500))
+        let reviewScroll = try XCTUnwrap(findScrollView(in: host.view))
+        reviewScroll.setContentOffset(CGPoint(x: 0, y: max(0, reviewScroll.contentSize.height - reviewScroll.bounds.height
+            + reviewScroll.adjustedContentInset.bottom)), animated: false)
+        try await Task.sleep(for: .milliseconds(300))
+        try capture(window, name: "signature-default")
     }
 
     private func capture(_ window: UIWindow, name: String) throws {

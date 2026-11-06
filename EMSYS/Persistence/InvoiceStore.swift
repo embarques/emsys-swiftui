@@ -10,6 +10,7 @@ actor InvoiceStore {
         case invalidInvoiceID
         case invoicePoolEmpty
         case invoiceReservationChanged
+        case invoiceNumberPreviewChanged
         case invalidCreationReceipt
         case invalidPage
         case invalidPageContents
@@ -908,7 +909,8 @@ extension InvoiceStore {
 
     /// The saved form and immutable first upload commit together. Network work
     /// starts only after this transaction returns successfully.
-    func queueInvoiceCreation(draftID: UUID, expectedRevision: Int64?, plan: InvoiceCreationPlan) throws -> PendingInvoiceCreation {
+    func queueInvoiceCreation(draftID: UUID, expectedRevision: Int64?, plan: InvoiceCreationPlan,
+                              expectedNumber: String? = nil) throws -> PendingInvoiceCreation {
         try Self.validateDraft(plan.content)
         let encoder = JSONEncoder()
         let content = try encoder.encode(plan.content)
@@ -916,8 +918,8 @@ extension InvoiceStore {
         let operationID = plan.invoiceRequestID
         let now = Date.now
         return try database.write { database in
-            guard let payload = try Data.fetchOne(database, sql: "SELECT payload FROM invoiceReservations WHERE state = 'available' ORDER BY id LIMIT 1") else { throw StoreError.invoicePoolEmpty }
-            let reservation = try JSONDecoder().decode(InvoiceReservation.self, from: payload)
+            guard let reservation = try Self.nextInvoiceReservation(in: database) else { throw StoreError.invoicePoolEmpty }
+            if let expectedNumber, reservation.number != expectedNumber { throw StoreError.invoiceNumberPreviewChanged }
             let plan = try plan.reserving(reservation)
             let frozen = try encoder.encode(plan)
             guard frozen.count <= 3 * 1024 * 1024 else { throw StoreError.invalidDraft }
@@ -1420,6 +1422,19 @@ extension InvoiceStore {
 
     func availableInvoiceReservationCount() throws -> Int {
         try database.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM invoiceReservations WHERE state = 'available'") ?? 0 }
+    }
+
+    func invoiceNumberAvailability() throws -> (count: Int, nextNumber: String?) {
+        try database.read { database in
+            let count = try Int.fetchOne(database, sql: "SELECT COUNT(*) FROM invoiceReservations WHERE state = 'available'") ?? 0
+            return (count, try Self.nextInvoiceReservation(in: database)?.number)
+        }
+    }
+
+    private nonisolated static func nextInvoiceReservation(in database: Database) throws -> InvoiceReservation? {
+        guard let payload = try Data.fetchOne(database,
+            sql: "SELECT payload FROM invoiceReservations WHERE state = 'available' ORDER BY id LIMIT 1") else { return nil }
+        return try JSONDecoder().decode(InvoiceReservation.self, from: payload)
     }
 
     func saveInvoicePoolThreshold(_ threshold: Int) throws {

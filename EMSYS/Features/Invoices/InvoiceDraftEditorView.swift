@@ -187,7 +187,7 @@ struct InvoiceDraftEditorView: View {
                 VStack(alignment: .leading, spacing: AppStyle.Spacing.small) {
                     Label("invoiceCreation.number", systemImage: "doc.text")
                         .font(.subheadline).foregroundStyle(.secondary)
-                    Text("invoiceCreation.automaticNumber").font(.headline)
+                    Text(verbatim: model.nextInvoiceNumber ?? "—").font(.headline).monospacedDigit()
                 }
                 .padding(.vertical, 8)
         }
@@ -288,9 +288,9 @@ struct InvoiceDraftEditorView: View {
                     set: { model.setPoliciesAgreed($0) }))
             }
             Toggle("invoiceCreation.skipSignature", isOn: Binding(
-                get: { model.currentConfirmation?.skipSignature ?? true },
+                get: { model.skipsSignature },
                 set: { model.setSkipSignature($0) }))
-            if model.currentConfirmation?.skipSignature == false {
+            if !model.skipsSignature {
                 if let signature = model.currentSenderSignature, let png = signature.pngData {
                     InvoiceSignaturePreview(png: png, signerName: signature.signerName,
                         capturedAt: model.content.senderSignatureCapturedAt,
@@ -307,6 +307,11 @@ struct InvoiceDraftEditorView: View {
     private var reviewSummary: some View {
         Section("invoiceCreation.step.review") {
             LabeledContent("drafts.date", value: model.content.date.apiValue)
+            if let number = model.nextInvoiceNumber {
+                LabeledContent("invoiceCreation.number") {
+                    Text(verbatim: number).monospacedDigit()
+                }
+            }
             LabeledContent("invoices.sender", value: model.content.senderName)
             if !model.content.receiverName.isEmpty {
                 LabeledContent("invoices.receiver", value: model.content.receiverName)
