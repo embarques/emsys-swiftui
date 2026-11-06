@@ -81,12 +81,9 @@ struct InvoiceListView: View {
         }
         .safeAreaInset(edge: .top, spacing: 0) {
             if session.canCreateInvoices, let model {
-                if let issue = model.invoicePoolIssue { Text(LocalizedStringKey(issue)).font(.caption).padding(8) }
-                if let count = model.availableReservations, count <= model.poolThreshold {
-                    Button { sheet = .pool(draftListModel(model).pool()) } label: {
-                        Label(count == 0 ? "invoicePool.empty" : "invoicePool.low", systemImage: "exclamationmark.triangle.fill")
-                            .font(.caption).foregroundStyle(.orange).padding(8)
-                    }
+                InvoicePoolWarningView(issue: model.invoicePoolIssue, count: model.availableReservations,
+                                       threshold: model.poolThreshold) {
+                    sheet = .pool(draftListModel(model).pool())
                 }
             }
         }

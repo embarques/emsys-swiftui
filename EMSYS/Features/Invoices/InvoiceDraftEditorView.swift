@@ -39,6 +39,7 @@ struct InvoiceDraftEditorView: View {
                         }
                     }
                 }
+                .background(.background, ignoresSafeAreaEdges: [])
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
