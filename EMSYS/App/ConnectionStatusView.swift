@@ -27,6 +27,7 @@ struct ConnectionStatusView: View {
         }
         .font(.callout)
         .fixedSize(horizontal: false, vertical: true)
+        .background(.background, ignoresSafeAreaEdges: [])
         .accessibilityElement(children: .combine)
     }
 }

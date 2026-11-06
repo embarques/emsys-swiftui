@@ -35,7 +35,8 @@ struct InvoiceListView: View {
     var body: some View {
         ZStack {
             if let model {
-                InvoiceDirectoryView(query: $query, invoices: model.invoices,
+                InvoiceDirectoryView(query: $query, invoices: model.invoices, localEntries: model.localEntries,
+                    openLocal: { creation = draftListModel(model).editor(draftID: $0.draftID) },
                     outstandingBalance: model.outstandingBalance, isLoading: model.isLoading,
                     isDownloaded: model.isShowingDownloaded, hasMore: model.hasMore, issue: model.issue,
                     showFilters: { sheet = .filters }, open: { selectedInvoiceID = $0.id },
@@ -81,21 +82,21 @@ struct InvoiceListView: View {
         }
         .safeAreaInset(edge: .top, spacing: 0) {
             if session.canCreateInvoices, let model {
-                if let issue = model.invoicePoolIssue { Text(LocalizedStringKey(issue)).font(.caption).padding(8) }
-                if let count = model.availableReservations, count <= model.poolThreshold {
-                    Button { sheet = .pool(draftListModel(model).pool()) } label: {
-                        Label(count == 0 ? "invoicePool.empty" : "invoicePool.low", systemImage: "exclamationmark.triangle.fill")
-                            .font(.caption).foregroundStyle(.orange).padding(8)
-                    }
+                InvoicePoolWarningView(issue: model.invoicePoolIssue, count: model.availableReservations,
+                                       threshold: model.poolThreshold) {
+                    sheet = .pool(draftListModel(model).pool())
                 }
             }
         }
         .modifier(InvoicePreviewModifier(preview: preview))
-        .modifier(InvoiceCreationPresentation(editor: $creation, onDismiss: { Task { await model?.refreshInvoicePoolSummary() } }))
+        .modifier(InvoiceCreationPresentation(editor: $creation, onDismiss: {
+            model?.request(query: query, online: online)
+            Task { await model?.refreshInvoicePoolSummary() }
+        }))
         .onChange(of: session.contextID) { preview.cancel() }
         .navigationTitle(preferences.language.localizedString("navigation.invoices"))
         .navigationDestination(item: $selectedInvoiceID) { id in
-            if let model, let invoice = model.invoices.first(where: { $0.id == id }) {
+            if let model, let invoice = (model.localEntries.compactMap(\.invoice) + model.invoices).first(where: { $0.id == id }) {
                 InvoiceDetailView(model: model.detail(for: invoice))
             }
         }

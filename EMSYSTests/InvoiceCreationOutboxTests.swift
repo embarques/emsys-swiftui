@@ -445,6 +445,38 @@ final class InvoiceCreationOutboxTests: XCTestCase {
         XCTAssertNil(remaining.nextNumber)
     }
 
+    func testLocalDirectoryShowsNewestCreationsAndKeepsReviewItemsInUnsynced() async throws {
+        let directory = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try await open(directory)
+        let older = try await store.queueInvoiceCreation(draftID: UUID(), expectedRevision: nil, plan: makePlan())
+        try await store.setInvoiceCreationState(id: older.id, state: .needsReview)
+        let newest = try await store.queueInvoiceCreation(draftID: UUID(), expectedRevision: nil, plan: makePlan())
+        let pending = try await store.localInvoiceListEntries(includeRecentConfirmed: false)
+        XCTAssertEqual(pending.map(\.draftID), [newest.draftID, older.draftID])
+        XCTAssertEqual(pending.map(\.state), [.pending, .needsReview])
+        XCTAssertEqual(pending.first?.date, "2026-10-26")
+        XCTAssertEqual(pending.first?.number, newest.plan.reservation?.number)
+        let reservation = try XCTUnwrap(newest.plan.reservation)
+        let confirmed = try JSONDecoder().decode(Invoice.self,
+            from: JSONSerialization.data(withJSONObject: ["id": reservation.id, "number": reservation.number]))
+        try await store.completeInvoiceCreation(id: newest.id, invoice: confirmed)
+        let all = try await store.localInvoiceListEntries(includeRecentConfirmed: true)
+        XCTAssertEqual(all.map(\.draftID), [newest.draftID, older.draftID])
+        XCTAssertEqual(all.first?.invoice?.id, confirmed.id)
+
+        let (client, session) = try makeClient([])
+        defer { session.invalidateAndCancel() }
+        let model = InvoiceListModel(client: client, store: store)
+        var query = InvoiceListQuery()
+        query.scope = .unsynced
+        await model.load(query: query, online: true)
+        XCTAssertEqual(model.localEntries.map(\.draftID), [older.draftID])
+        XCTAssertTrue(model.invoices.isEmpty)
+        XCTAssertTrue(CreationProtocol.paths.isEmpty)
+        XCTAssertFalse(model.hasMore)
+    }
+
     func testPaymentCaptureQueuesWithoutCuadreAccessAndUsesAuthenticatedBranch() async throws {
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }

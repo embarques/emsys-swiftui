@@ -5,6 +5,8 @@ struct InvoiceDirectoryView: View {
     @Environment(\.locale) private var locale
     @Binding var query: InvoiceListQuery
     let invoices: [Invoice]
+    var localEntries: [LocalInvoiceListEntry] = []
+    var openLocal: (LocalInvoiceListEntry) -> Void = { _ in }
     let outstandingBalance: Decimal
     let isLoading: Bool
     let isDownloaded: Bool
@@ -17,9 +19,14 @@ struct InvoiceDirectoryView: View {
     let retry: () async -> Void
     let refresh: () async -> Void
 
+    private var directoryInvoices: [Invoice] {
+        let pinned = Set(localEntries.compactMap { $0.invoice?.id })
+        return invoices.filter { !pinned.contains($0.id) }
+    }
+
     private var months: [String] {
         var seen = Set<String>()
-        return invoices.map(\.monthKey).filter { seen.insert($0).inserted }
+        return directoryInvoices.map(\.monthKey).filter { seen.insert($0).inserted }
     }
 
     var body: some View {
@@ -39,11 +46,34 @@ struct InvoiceDirectoryView: View {
                     .background(AppStyle.Colors.surface, in: RoundedRectangle(cornerRadius: 12))
                     .padding(.bottom, 12)
                 }
+                if !localEntries.isEmpty {
+                    Text("invoiceList.localCreations").font(.headline).foregroundStyle(.secondary)
+                        .padding(.vertical, 10)
+                    ForEach(localEntries) { entry in
+                        if let invoice = entry.invoice {
+                            InvoiceListRow(invoice: invoice, open: { open(invoice) },
+                                printInvoice: printInvoice.map { action in { action(invoice) } })
+                        } else {
+                            Button { openLocal(entry) } label: {
+                                VStack(alignment: .leading, spacing: 5) {
+                                    Text(entry.number ?? entry.senderName).font(.headline)
+                                    if entry.number != nil { Text(entry.senderName) }
+                                    Label(LocalizedStringKey(entry.state.title), systemImage: "clock.arrow.circlepath")
+                                        .font(.caption).foregroundStyle(.secondary)
+                                }
+                                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                                .padding(12)
+                                .background(.background, in: RoundedRectangle(cornerRadius: 12))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
                 ForEach(months, id: \.self) { month in
                     Text(monthTitle(month)).font(.headline).foregroundStyle(.secondary)
                         .padding(.top, 12).padding(.bottom, 10)
                     LazyVStack(spacing: 0) {
-                        ForEach(invoices.filter { $0.monthKey == month }) { invoice in
+                        ForEach(directoryInvoices.filter { $0.monthKey == month }) { invoice in
                             InvoiceListRow(invoice: invoice, open: { open(invoice) },
                                 printInvoice: printInvoice.map { action in { action(invoice) } })
                             Divider().padding(.horizontal, 16)
@@ -52,12 +82,12 @@ struct InvoiceDirectoryView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 16))
                     .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.secondary.opacity(0.15)))
                 }
-                if invoices.isEmpty {
+                if invoices.isEmpty && localEntries.isEmpty {
                     if isLoading { ProgressView().frame(maxWidth: .infinity).padding(40) }
                     else if issue == nil {
-                        ContentUnavailableView(LocalizedStringKey(isDownloaded ? "invoices.empty" : "invoiceList.liveEmpty"),
+                        ContentUnavailableView(LocalizedStringKey(query.scope == .unsynced ? "invoiceList.unsyncedEmpty" : (isDownloaded ? "invoices.empty" : "invoiceList.liveEmpty")),
                             systemImage: "doc.text.magnifyingglass",
-                            description: Text(LocalizedStringKey(isDownloaded ? "invoiceList.emptyHint" : "invoiceList.liveEmptyHint")))
+                            description: query.scope == .unsynced ? nil : Text(LocalizedStringKey(isDownloaded ? "invoiceList.emptyHint" : "invoiceList.liveEmptyHint")))
                     }
                 }
                 if hasMore, !invoices.isEmpty, issue == nil {

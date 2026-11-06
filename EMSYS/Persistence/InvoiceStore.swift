@@ -434,6 +434,7 @@ actor InvoiceStore {
         case .all: break
         case .due: clauses.append("CAST(json_extract(payload, '$.balance') AS REAL) > 0")
         case .paid: clauses.append("json_extract(payload, '$.paidStatus') = 'CLOSED'")
+        case .unsynced: clauses.append("0 = 1")
         case .incomplete: clauses.append("json_extract(payload, '$.registration') = 'PENDING'")
         }
         if !query.startDate.isEmpty {
@@ -1002,6 +1003,40 @@ extension InvoiceStore {
         try database.read {
             try Row.fetchOne($0, sql: "SELECT * FROM invoiceCreations WHERE draftID = ?", arguments: [draftID.uuidString])
                 .map(Self.decodeInvoiceCreation)
+        }
+    }
+
+    func localInvoiceListEntries(includeRecentConfirmed: Bool) throws -> [LocalInvoiceListEntry] {
+        try database.read { database in
+            let rows = try Row.fetchAll(database, sql: """
+                SELECT c.id, c.draftID, c.state,
+                    json_extract(CAST(c.plan AS TEXT), '$.reservation.number') AS number,
+                    json_extract(CAST(c.plan AS TEXT), '$.content.senderName') AS senderName,
+                    json_extract(CAST(c.plan AS TEXT), '$.content.receiverName') AS receiverName,
+                    printf('%04d-%02d-%02d',
+                        json_extract(CAST(c.plan AS TEXT), '$.content.date.year'),
+                        json_extract(CAST(c.plan AS TEXT), '$.content.date.month'),
+                        json_extract(CAST(c.plan AS TEXT), '$.content.date.day')) AS date,
+                    json_extract(CAST(c.plan AS TEXT), '$.content.container.name') AS container,
+                    COALESCE(s.detailPayload, s.payload) AS invoice
+                FROM invoiceCreations c LEFT JOIN invoiceSnapshots s ON c.invoiceID = s.id
+                WHERE c.state != 'completed' OR c.id IN (
+                    SELECT id FROM invoiceCreations WHERE state = 'completed' AND ? AND createdAt >= ?
+                    ORDER BY createdAt DESC, id DESC LIMIT 50
+                )
+                ORDER BY c.createdAt DESC, c.id DESC
+                """, arguments: [includeRecentConfirmed, Date.now.addingTimeInterval(-86_400).timeIntervalSince1970])
+            return try rows.compactMap { row in
+                guard let draftID = UUID(uuidString: row["draftID"]),
+                      let state = PendingInvoiceCreation.State(rawValue: row["state"]) else { throw StoreError.invalidDraft }
+                let payload: Data? = row["invoice"]
+                let invoice = try payload.map { try JSONDecoder().decode(Invoice.self, from: $0) }
+                guard state != .completed || invoice != nil else { return nil }
+                return LocalInvoiceListEntry(id: row["id"], draftID: draftID,
+                    number: invoice?.number ?? row["number"], senderName: row["senderName"] ?? "",
+                    receiverName: row["receiverName"] ?? "", date: row["date"] ?? "",
+                    container: row["container"], state: state, invoice: invoice)
+            }
         }
     }
 

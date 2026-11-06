@@ -19,6 +19,7 @@ final class InvoiceListModel {
         }
     }
 
+    private(set) var localEntries: [LocalInvoiceListEntry] = []
     private(set) var invoices: [Invoice] = []
     private(set) var page = 0
     private(set) var isLoading = false
@@ -103,6 +104,23 @@ final class InvoiceListModel {
         invoices = []
         hasMore = false
         defer { if generation == token { isLoading = false } }
+        localEntries = []
+        if requestedQuery.scope == .unsynced || !requestedQuery.requiresSearch {
+            do {
+                let entries = try await store.localInvoiceListEntries(includeRecentConfirmed: requestedQuery.scope == .all)
+                try Task.checkCancellation()
+                guard generation == token else { return }
+                localEntries = entries.filter { $0.matches(requestedQuery) }
+            } catch is CancellationError { return }
+            catch {
+                guard generation == token else { return }
+                issue = "invoices.storageError"
+            }
+        }
+        if requestedQuery.scope == .unsynced {
+            isShowingDownloaded = false
+            return
+        }
         if online {
             await fetch(page: 1, query: requestedQuery, token: token)
         } else {
