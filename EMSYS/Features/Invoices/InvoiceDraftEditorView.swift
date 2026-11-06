@@ -288,9 +288,9 @@ struct InvoiceDraftEditorView: View {
                     set: { model.setPoliciesAgreed($0) }))
             }
             Toggle("invoiceCreation.skipSignature", isOn: Binding(
-                get: { model.currentConfirmation?.skipSignature ?? true },
+                get: { model.skipsSignature },
                 set: { model.setSkipSignature($0) }))
-            if model.currentConfirmation?.skipSignature == false {
+            if !model.skipsSignature {
                 if let signature = model.currentSenderSignature, let png = signature.pngData {
                     InvoiceSignaturePreview(png: png, signerName: signature.signerName,
                         capturedAt: model.content.senderSignatureCapturedAt,

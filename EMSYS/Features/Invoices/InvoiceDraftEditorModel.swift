@@ -414,6 +414,15 @@ final class InvoiceDraftEditorModel: Identifiable {
         return confirmation
     }
 
+    var skipsSignature: Bool {
+        if let confirmation = currentConfirmation { return confirmation.skipSignature }
+        #if os(iOS)
+        return false
+        #else
+        return true
+        #endif
+    }
+
     var currentSenderSignature: InvoiceSenderSignature? {
         guard let confirmation = currentConfirmation, !confirmation.skipSignature else { return nil }
         return content.senderSignature
@@ -432,7 +441,7 @@ final class InvoiceDraftEditorModel: Identifiable {
         guard isAvailable, isLoaded, !isSaving, !isPreparingSignature,
               let hash = try? InvoiceDraftConfirmation.contextHash(for: content) else { return }
         var confirmation = currentConfirmation ?? InvoiceDraftConfirmation(
-            contextHash: hash, policiesAgreed: false, skipSignature: true)
+            contextHash: hash, policiesAgreed: false, skipSignature: skipsSignature)
         if currentConfirmation == nil {
             content.senderSignature = nil
             content.senderSignatureCapturedAt = nil
@@ -575,7 +584,10 @@ final class InvoiceDraftEditorModel: Identifiable {
             if content.paymentRegion?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false {
                 return "invoiceCreation.paymentRegionRequired"
             }
-        case .review: break
+        case .review:
+            if !skipsSignature && currentSenderSignature == nil {
+                return "invoiceCreation.signatureRequired"
+            }
         }
         return nil
     }

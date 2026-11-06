@@ -431,6 +431,7 @@ final class InvoiceCreationOutboxTests: XCTestCase {
         let used = try await store.queueInvoiceCreation(draftID: UUID(), expectedRevision: nil, plan: plan)
         XCTAssertEqual(used.plan.reservation?.number, reservation.number)
 
+        editor.setSkipSignature(true)
         await editor.queueCreation()
         XCTAssertNil(editor.creation)
         XCTAssertEqual(editor.issue, "invoicePool.numberChanged")
@@ -454,6 +455,7 @@ final class InvoiceCreationOutboxTests: XCTestCase {
         await editor.load()
         XCTAssertNil(editor.content.paymentReview)
         XCTAssertNil(editor.validationIssue(for: .payment))
+        editor.setSkipSignature(true)
         await editor.queueCreation()
         XCTAssertTrue(editor.didQueueCreation)
         let operation = try XCTUnwrap(editor.creation)

@@ -20,6 +20,33 @@ final class InvoiceDraftConfirmationTests: XCTestCase {
         XCTAssertFalse(confirmation.matches(content))
     }
 
+    func testSignatureDefaultAndExplicitSkipSurviveDraftReview() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try await InvoiceStore.open(directory: directory, userID: "user", companyID: "company")
+        let model = InvoiceDraftEditorModel(store: store, isAuthorized: { true })
+        model.content.policies = []
+        #if os(iOS)
+        XCTAssertFalse(model.skipsSignature)
+        XCTAssertEqual(model.validationIssue(for: .review), "invoiceCreation.signatureRequired")
+        model.setPoliciesAgreed(true)
+        XCTAssertFalse(model.skipsSignature, "Agreeing to policies must not opt out of signing")
+        #else
+        XCTAssertTrue(model.skipsSignature)
+        XCTAssertNil(model.validationIssue(for: .review))
+        #endif
+        model.setSkipSignature(true)
+        await model.save()
+        let summaries = try await store.draftSummaries()
+        let reopened = InvoiceDraftEditorModel(draftID: try XCTUnwrap(summaries.first?.id),
+            store: store, isAuthorized: { true })
+        await reopened.load()
+        XCTAssertTrue(reopened.skipsSignature)
+        XCTAssertNil(reopened.validationIssue(for: .review))
+        reopened.setSkipSignature(false)
+        XCTAssertEqual(reopened.validationIssue(for: .review), "invoiceCreation.signatureRequired")
+    }
+
     func testCapturedPNGSurvivesReopenAndChangesRequireNewConfirmation() async throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }

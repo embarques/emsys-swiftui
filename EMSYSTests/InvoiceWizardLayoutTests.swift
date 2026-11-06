@@ -79,6 +79,15 @@ final class InvoiceWizardLayoutTests: XCTestCase {
         try capture(window, name: "items-accessible")
         XCTAssertLessThanOrEqual(scroll.contentSize.width, scroll.bounds.width + 1)
         XCTAssertEqual(model.content.senderAddressID, customer.addresses?.first?.id)
+        host.traitOverrides.preferredContentSizeCategory = .large
+        model.content.wizardStep = .review
+        XCTAssertFalse(model.skipsSignature)
+        try await Task.sleep(for: .milliseconds(500))
+        let reviewScroll = try XCTUnwrap(findScrollView(in: host.view))
+        reviewScroll.setContentOffset(CGPoint(x: 0, y: max(0, reviewScroll.contentSize.height - reviewScroll.bounds.height
+            + reviewScroll.adjustedContentInset.bottom)), animated: false)
+        try await Task.sleep(for: .milliseconds(300))
+        try capture(window, name: "signature-default")
     }
 
     private func capture(_ window: UIWindow, name: String) throws {

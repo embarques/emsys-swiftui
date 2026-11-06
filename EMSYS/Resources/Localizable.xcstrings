@@ -2298,6 +2298,23 @@
         }
       }
     },
+    "invoiceCreation.signatureRequired": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Captura la firma del remitente o elige omitirla."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Capture the sender’s signature or choose to skip it."
+          }
+        }
+      }
+    },
     "invoiceCreation.captureSignature": {
       "extractionState": "manual",
       "localizations": {
