@@ -1,33 +1,46 @@
 import SwiftUI
 
 struct InvoicePaymentFields: View {
+    @Environment(\.locale) private var locale
     @Environment(NetworkConnection.self) private var connection
     @Bindable var model: InvoiceDraftEditorModel
 
     var body: some View {
         Section {
-            Picker("invoicePayment.mode", selection: Binding(
-                get: { model.content.payment?.mode },
-                set: { if let mode = $0 { model.setPaymentMode(mode) } }
+            Toggle(isOn: Binding(
+                get: { model.content.payment?.mode == .record },
+                set: { model.setPaymentMode($0 ? .record : .skip) }
             )) {
-                Text("invoicePayment.chooseMode").tag(nil as InvoiceDraftPayment.Mode?)
-                Text("invoicePayment.skip").tag(Optional(InvoiceDraftPayment.Mode.skip))
-                if model.canRecordPayment || model.content.payment?.mode == .record {
-                    Text("invoicePayment.recordShort").tag(Optional(InvoiceDraftPayment.Mode.record))
+                VStack(alignment: .leading, spacing: AppStyle.Spacing.small) {
+                    Text("invoicePayment.recordShort")
+                    Text(model.content.payment?.mode == .record ? "invoicePayment.yes" : "invoicePayment.no")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
                 }
             }
+            .toggleStyle(.switch)
+            .disabled(model.isSaving || (!model.canRecordPayment && model.content.payment?.mode != .record))
+
             if model.content.payment?.mode == .record {
                 amountEntry
-                    .disabled(!model.canRecordPayment)
+                    .disabled(!model.canRecordPayment || model.isSaving)
+                Picker("invoicePayment.method", selection: Binding(
+                    get: { model.content.payment?.method },
+                    set: { model.setPaymentMethod($0) }
+                )) {
+                    if model.content.payment?.method == nil {
+                        Text("invoicePayment.methodRequired").tag(nil as InvoiceDraftPayment.Method?)
+                    }
+                    ForEach(InvoiceDraftPayment.Method.allCases) { method in
+                        Label(LocalizedStringKey(method.title), systemImage: method.symbol).tag(Optional(method))
+                    }
+                }
+                .pickerStyle(.menu)
+                .disabled(!model.canRecordPayment || model.isSaving)
             }
         }
         if model.content.payment?.mode == .record {
-            Section("invoicePayment.method") {
-                ForEach(InvoiceDraftPayment.Method.allCases) { method in
-                    methodRow(method)
-                }
-            }
-            .disabled(!model.canRecordPayment || model.isSaving)
             if model.content.payment?.method != nil {
                 Section("invoicePayment.details") {
                     paymentDetails
@@ -62,46 +75,22 @@ struct InvoicePaymentFields: View {
     }
 
     private var amountEntry: some View {
-        VStack(spacing: AppStyle.Spacing.small) {
+        VStack(alignment: .leading, spacing: AppStyle.Spacing.small) {
             Text("invoicePayment.amount").font(.subheadline).foregroundStyle(.secondary)
-            TextField("invoicePayment.amount", text: paymentBinding(\.amount, fallback: ""))
+            TextField("invoicePayment.amount", text: paymentBinding(\.amount, fallback: ""),
+                      prompt: Text(verbatim: 0.formatted(.number.precision(.fractionLength(2)).locale(locale))))
+                .textFieldStyle(.plain)
                 #if os(iOS)
                 .keyboardType(.decimalPad)
                 #endif
-                .multilineTextAlignment(.center)
-                .font(.largeTitle.bold())
+                .font(.title3.weight(.semibold))
                 .monospacedDigit()
-                .foregroundStyle(AppStyle.Colors.accent)
+                .padding(.horizontal, AppStyle.Spacing.medium)
+                .frame(minHeight: 44)
+                .overlay { RoundedRectangle(cornerRadius: 8).strokeBorder(.quaternary) }
                 .accessibilityLabel(Text("invoicePayment.amount"))
-            Label("invoicePayment.editAmount", systemImage: "pencil")
-                .font(.caption).foregroundStyle(.secondary)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, AppStyle.Spacing.large)
-    }
-
-    private func methodRow(_ method: InvoiceDraftPayment.Method) -> some View {
-        let selected = model.content.payment?.method == method
-        return Button {
-            model.setPaymentMethod(method)
-        } label: {
-            HStack(spacing: AppStyle.Spacing.medium) {
-                Image(systemName: method.symbol)
-                    .font(.title3)
-                    .foregroundStyle(AppStyle.Colors.accent)
-                    .frame(width: 28)
-                    .accessibilityHidden(true)
-                Text(LocalizedStringKey(method.title)).foregroundStyle(.primary)
-                Spacer(minLength: AppStyle.Spacing.small)
-                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(selected ? AppStyle.Colors.accent : .secondary)
-                    .accessibilityHidden(true)
-            }
-            .frame(minHeight: 44)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(selected ? [.isSelected] : [])
+        .padding(.vertical, AppStyle.Spacing.small)
     }
 
     @ViewBuilder

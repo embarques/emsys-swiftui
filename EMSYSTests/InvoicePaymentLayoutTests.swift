@@ -13,9 +13,8 @@ final class InvoicePaymentLayoutTests: XCTestCase {
         var content = InvoiceDraft.Content()
         content.wizardStep = .payment
         content.items = [.init(name: "Caja", unitPrice: "385")]
-        content.payment = .init(mode: .record, amount: "100", method: .cash)
         let model = InvoiceDraftEditorModel(initialContent: content, store: store,
-            financialPermission: { _ in true }, isAuthorized: { true })
+            defaultPaymentRegion: "NY", financialPermission: { _ in true }, isAuthorized: { true })
         let host = UIHostingController(rootView: InvoiceDraftEditorView(model: model)
             .environment(NetworkConnection()).environment(SynchronizationState())
             .environment(\.locale, Locale(identifier: "es-DO")))
@@ -29,6 +28,9 @@ final class InvoicePaymentLayoutTests: XCTestCase {
         defer { window.isHidden = true; previous?.makeKey() }
         try await Task.sleep(for: .milliseconds(600))
         try capture(window, name: "selection")
+        XCTAssertEqual(model.content.payment?.method, .cash)
+        XCTAssertEqual(model.content.paymentRegion, "NY")
+        model.content.payment?.amount = "100"
         XCTAssertEqual(model.paymentTotals?.balance, 285)
         let scroll = try XCTUnwrap(findScrollView(in: host.view))
         scroll.setContentOffset(CGPoint(x: 0, y: min(280, max(0, scroll.contentSize.height - scroll.bounds.height))), animated: false)

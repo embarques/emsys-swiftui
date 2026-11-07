@@ -12,25 +12,25 @@ final class InvoiceItemCatalogTests: XCTestCase {
         let row = InvoiceDraft.Item(name: "Typed", quantity: "3", unitPrice: "2", labelCount: "2", total: "25")
         editor.content.items = [row]
         let selected = InvoiceCatalogItem(id: 7, name: "CAJA GRANDE", price: 12.5, createdAt: nil)
-        editor.selectCatalogItem(selected, for: row.id)
+        XCTAssertTrue(editor.selectCatalogItem(selected, for: row.id))
         XCTAssertEqual(editor.content.items[0].name, "CAJA GRANDE")
         XCTAssertEqual(editor.content.items[0].unitPrice, "12.50")
         XCTAssertEqual(editor.content.items[0].quantity, "3")
         XCTAssertEqual(editor.content.items[0].labelCount, "2")
         XCTAssertEqual(editor.content.items[0].total, "25")
         editor.content.items[0].total = ""
-        editor.selectCatalogItem(selected, for: row.id)
+        XCTAssertTrue(editor.selectCatalogItem(selected, for: row.id))
         XCTAssertEqual(editor.amounts?.subtotal, 37.5)
         editor.content.items[0].name = "Custom merchandise"
         let saved = try await store.saveDraft(id: UUID(), content: editor.content, expectedRevision: nil)
         let reopened = try await store.draft(id: saved.id)
         XCTAssertEqual(reopened?.content.items[0].name, "Custom merchandise")
         allowed = false
-        editor.selectCatalogItem(selected, for: row.id)
+        XCTAssertFalse(editor.selectCatalogItem(selected, for: row.id))
         XCTAssertEqual(editor.content.items[0].name, "Custom merchandise")
         allowed = true
         editor.removeItem(id: row.id)
-        editor.selectCatalogItem(selected, for: row.id)
+        XCTAssertFalse(editor.selectCatalogItem(selected, for: row.id))
         XCTAssertTrue(editor.content.items.isEmpty)
     }
 

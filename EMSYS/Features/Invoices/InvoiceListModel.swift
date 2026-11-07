@@ -84,12 +84,14 @@ final class InvoiceListModel {
                 canViewContainers: @escaping () -> Bool,
                 canViewAssignments: @escaping (InvoiceAssignmentPermission) -> Bool,
                 canReviewPayments: @escaping () -> Bool, currentBranchID: @escaping () -> UInt16?,
+                defaultPaymentRegion: String? = nil,
                 financialPermission: @escaping (InvoiceFinancialPermission) -> Bool = { _ in false },
                 isAuthorized: @escaping () -> Bool) -> InvoiceDraftListModel {
         InvoiceDraftListModel(canGeneratePool: canGeneratePool, store: store, client: client, canViewItemCatalog: canViewItemCatalog, canViewCustomers: canViewCustomers,
             canReviewPolicies: canReviewPolicies, canViewContainers: canViewContainers,
             canViewAssignments: canViewAssignments, canReviewPayments: canReviewPayments,
-            currentBranchID: currentBranchID, financialPermission: financialPermission, isAuthorized: isAuthorized)
+            currentBranchID: currentBranchID, defaultPaymentRegion: defaultPaymentRegion,
+            financialPermission: financialPermission, isAuthorized: isAuthorized)
     }
 
     func load(query newQuery: InvoiceListQuery? = nil, online: Bool = true) async {

@@ -104,13 +104,48 @@ final class InvoiceDraftPaymentTests: XCTestCase {
         XCTAssertTrue(otherAccounts.isEmpty)
     }
 
+    func testDefaultsApplyToNewAndLegacyDraftsAndPreserveSavedChoices() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try await InvoiceStore.open(directory: directory, userID: "user", companyID: "company")
+        let list = InvoiceDraftListModel(store: store, defaultPaymentRegion: "NY",
+            financialPermission: { $0 == .recordPayment }, isAuthorized: { true })
+        let new = list.editor()
+        XCTAssertEqual(new.content.payment?.mode, .record)
+        XCTAssertEqual(new.content.payment?.method, .cash)
+        XCTAssertEqual(new.content.paymentRegion, "NY")
+        XCTAssertFalse(new.hasChanges)
+
+        let legacy = try await store.saveDraft(id: UUID(), content: InvoiceDraft.Content(), expectedRevision: nil)
+        let restored = list.editor(draftID: legacy.id)
+        await restored.load()
+        XCTAssertEqual(restored.content.payment?.mode, .record)
+        XCTAssertEqual(restored.content.payment?.method, .cash)
+        XCTAssertEqual(restored.content.paymentRegion, "NY")
+        XCTAssertFalse(restored.hasChanges)
+
+        restored.setPaymentMethod(.check)
+        restored.content.payment?.amount = "12,50"
+        XCTAssertEqual(restored.content.payment?.totals(subtotal: 20)?.payment, 12.5)
+        restored.setPaymentMode(.skip)
+        restored.content.paymentRegion = "RD"
+        await restored.save()
+        let reopened = list.editor(draftID: legacy.id)
+        await reopened.load()
+        XCTAssertEqual(reopened.content.payment?.mode, .skip)
+        XCTAssertEqual(reopened.content.payment?.method, .check)
+        XCTAssertEqual(reopened.content.payment?.amount, "12,50")
+        XCTAssertEqual(reopened.content.paymentRegion, "RD")
+    }
+
     func testPermissionsSeparatePaymentRecordingAndDiscounts() async throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = try await InvoiceStore.open(directory: directory, userID: "user", companyID: "company")
         let denied = InvoiceDraftEditorModel(store: store, isAuthorized: { true })
         denied.setPaymentMode(.record)
-        XCTAssertNil(denied.content.payment)
+        XCTAssertEqual(denied.content.payment?.mode, .skip)
+        XCTAssertNil(denied.content.payment?.method)
         denied.setPaymentMode(.skip)
         XCTAssertEqual(denied.content.payment?.mode, .skip)
         let model = InvoiceDraftEditorModel(store: store, financialPermission: { permission in

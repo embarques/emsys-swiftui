@@ -35,7 +35,7 @@ final class PickupInvoiceTests: XCTestCase {
         let saved = try await reopened.draft(id: id)
         XCTAssertEqual(saved?.content.pickup?.id, 42)
         XCTAssertEqual(saved?.content.receiverName, "First recipient")
-        XCTAssertEqual(saved?.content, content)
+        XCTAssertEqual(saved?.content, editor.content)
         var invalid = content
         invalid.pickup = InvoicePickupReference(id: 0)
         do {

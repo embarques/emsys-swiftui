@@ -7,12 +7,23 @@ struct InvoiceDraftField: View {
     let title: LocalizedStringKey
     @Binding var text: String
     var input: Input = .text
+    var selection: Binding<TextSelection?>?
+
+    @ViewBuilder
+    private var editor: some View {
+        let axis: Axis = input == .text ? .vertical : .horizontal
+        if let selection {
+            TextField(title, text: $text, selection: selection, axis: axis)
+        } else {
+            TextField(title, text: $text, axis: axis)
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppStyle.Spacing.small) {
             Text(title).font(.subheadline).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-            TextField(title, text: $text, axis: input == .text ? .vertical : .horizontal)
+            editor
                 .font(.body.weight(.medium))
                 .textFieldStyle(.plain)
                 .accessibilityLabel(Text(title))
