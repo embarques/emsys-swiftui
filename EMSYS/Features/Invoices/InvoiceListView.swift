@@ -142,7 +142,7 @@ struct InvoiceListView: View {
                 && session.permissions?.contains("canViewIncomeStatement", resourceType: "income_statement") == true
         }, currentBranchID: {
             session.contextID == contextID ? session.user?.branch?.id : nil
-        }, financialPermission: { permission in
+        }, defaultPaymentRegion: session.user?.branch?.code, financialPermission: { permission in
             session.contextID == contextID && session.canViewInvoices && permission.isGranted(by: session.permissions)
         }) {
             session.contextID == contextID && session.canViewInvoices

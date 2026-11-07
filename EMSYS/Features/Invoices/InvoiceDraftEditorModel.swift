@@ -28,6 +28,7 @@ final class InvoiceDraftEditorModel: Identifiable {
     @ObservationIgnored private let canViewAssignments: (InvoiceAssignmentPermission) -> Bool
     @ObservationIgnored private let canReviewPayments: () -> Bool
     @ObservationIgnored private let financialPermission: (InvoiceFinancialPermission) -> Bool
+    @ObservationIgnored private let defaultPaymentRegion: String?
     @ObservationIgnored private let currentBranchID: () -> UInt16?
     @ObservationIgnored private let assignedOnlyAccess: Bool
 
@@ -37,6 +38,7 @@ final class InvoiceDraftEditorModel: Identifiable {
          canViewContainers: @escaping () -> Bool = { false },
          canViewAssignments: @escaping (InvoiceAssignmentPermission) -> Bool = { _ in false },
          canReviewPayments: @escaping () -> Bool = { false }, currentBranchID: @escaping () -> UInt16? = { nil },
+         defaultPaymentRegion: String? = nil,
          financialPermission: @escaping (InvoiceFinancialPermission) -> Bool = { _ in false },
          isAuthorized: @escaping () -> Bool) {
         let content = initialContent ?? InvoiceDraft.Content()
@@ -54,8 +56,11 @@ final class InvoiceDraftEditorModel: Identifiable {
         self.canViewAssignments = canViewAssignments
         self.canReviewPayments = canReviewPayments
         self.currentBranchID = currentBranchID
+        self.defaultPaymentRegion = defaultPaymentRegion?.trimmingCharacters(in: .whitespacesAndNewlines)
         self.assignedOnlyAccess = assignedOnlyAccess
         self.financialPermission = financialPermission
+        if isLoaded { applyPaymentDefaults() }
+        if initialContent == nil { original = self.content }
     }
 
     private(set) var attachmentIssue: String?
@@ -231,10 +236,24 @@ final class InvoiceDraftEditorModel: Identifiable {
     private(set) var isLoadingBankAccounts = false
     private(set) var bankAccountIssue: String?
 
+    private func applyPaymentDefaults() {
+        guard isAvailable, creation == nil else { return }
+        if content.payment == nil {
+            content.payment = canRecordPayment ? .init(mode: .record, method: .cash) : .init(mode: .skip)
+        } else if content.payment?.mode == .record, content.payment?.method == nil, canRecordPayment {
+            content.payment?.method = .cash
+        }
+        if content.paymentRegion?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false,
+           let defaultPaymentRegion, !defaultPaymentRegion.isEmpty {
+            content.paymentRegion = defaultPaymentRegion
+        }
+    }
+
     func setPaymentMode(_ mode: InvoiceDraftPayment.Mode) {
         guard isAvailable, !isSaving, mode != .record || canRecordPayment else { return }
         var payment = content.payment ?? InvoiceDraftPayment(mode: mode)
         payment.mode = mode
+        if mode == .record, payment.method == nil { payment.method = .cash }
         content.payment = payment
     }
 
@@ -530,15 +549,17 @@ final class InvoiceDraftEditorModel: Identifiable {
         }
     }
 
-    func selectCatalogItem(_ selected: InvoiceCatalogItem, for itemID: UUID) {
+    @discardableResult
+    func selectCatalogItem(_ selected: InvoiceCatalogItem, for itemID: UUID) -> Bool {
         guard canChooseCatalogItems, selected.isValid,
-              let index = content.items.firstIndex(where: { $0.id == itemID }) else { return }
+              let index = content.items.firstIndex(where: { $0.id == itemID }) else { return false }
         // Copy before mutation so bound rows never overlap exclusive array access.
         var item = content.items[index]
         item.name = selected.name
         item.unitPrice = selected.formattedPrice
         // Quantity, labels and a manually supplied total remain the user's values.
         content.items[index] = item
+        return true
     }
 
     func removeItem(id: UUID) {
@@ -760,7 +781,8 @@ final class InvoiceDraftEditorModel: Identifiable {
             guard isAuthorized(), !Task.isCancelled else { return }
             createdInvoiceNumber = created?.number ?? submission?.plan.reservation?.number
             content = draft.content
-            original = draft.content
+            applyPaymentDefaults()
+            original = content
             expectedRevision = draft.revision
             isLoaded = true
         } catch {

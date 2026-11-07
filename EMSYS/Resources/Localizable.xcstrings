@@ -4045,7 +4045,7 @@
         "es-DO": {
           "stringUnit": {
             "state": "translated",
-            "value": "Importe del pago"
+            "value": "Monto del pago"
           }
         }
       }
@@ -4424,6 +4424,23 @@
         }
       }
     },
+    "invoicePayment.no": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No"
+          }
+        },
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No"
+          }
+        }
+      }
+    },
     "invoicePayment.plannedPayment": {
       "extractionState": "manual",
       "localizations": {
@@ -4471,6 +4488,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Continuar sin registrar pago"
+          }
+        }
+      }
+    },
+    "invoicePayment.yes": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yes"
+          }
+        },
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sí"
           }
         }
       }

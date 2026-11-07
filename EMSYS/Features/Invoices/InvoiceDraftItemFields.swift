@@ -2,7 +2,10 @@ import SwiftUI
 
 struct InvoiceDraftItemFields: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @FocusState private var isPriceFocused: Bool
+    @State private var priceSelection: TextSelection?
     @Binding var item: InvoiceDraft.Item
+    @Binding var priceFocusRequest: UUID?
     let canChooseCatalogItems: Bool
     let choose: () -> Void
     let remove: () -> Void
@@ -13,8 +16,26 @@ struct InvoiceDraftItemFields: View {
         InvoiceDraftField(title: "invoices.quantity", text: $item.quantity, input: .decimal)
     }
     private var priceField: some View {
-        InvoiceDraftField(title: "drafts.unitPrice", text: $item.unitPrice, input: .decimal)
+        InvoiceDraftField(title: "drafts.unitPrice", text: $item.unitPrice, input: .decimal, selection: $priceSelection)
+            .focused($isPriceFocused)
+            .onChange(of: priceFocusRequest, initial: true) {
+                guard priceFocusRequest == item.id else { return }
+                if isPriceFocused {
+                    selectPrice()
+                } else {
+                    isPriceFocused = true
+                }
+            }
+            .onChange(of: isPriceFocused) {
+                if isPriceFocused, priceFocusRequest == item.id { selectPrice() }
+            }
     }
+    private func selectPrice() {
+        let price = item.unitPrice
+        priceSelection = TextSelection(range: price.startIndex..<price.endIndex)
+        priceFocusRequest = nil
+    }
+
     private var labelsField: some View {
         InvoiceDraftField(title: "drafts.labelCount", text: $item.labelCount, input: .integer)
     }

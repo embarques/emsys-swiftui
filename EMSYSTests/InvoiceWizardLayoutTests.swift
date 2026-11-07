@@ -25,6 +25,42 @@ final class InvoiceWizardLayoutTests: XCTestCase {
     }
 
     #if os(iOS)
+    func testCatalogPriceFocusSelectsTheWholePriceInTheRequestedRow() async throws {
+        let fixture = ItemPriceFocusFixture()
+        let host = UIHostingController(rootView: Form {
+            ForEach(fixture.items.indices, id: \.self) { index in
+                @Bindable var fixture = fixture
+                InvoiceDraftItemFields(item: $fixture.items[index], priceFocusRequest: $fixture.request,
+                    canChooseCatalogItems: true, choose: {}, remove: {})
+            }
+        })
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let previous = scene.windows.first(where: \.isKeyWindow)
+        let window = UIWindow(windowScene: scene)
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true; previous?.makeKey() }
+
+        try await Task.sleep(for: .milliseconds(300))
+        fixture.items[0].unitPrice = "12.50"
+        fixture.request = fixture.items[0].id
+        try await Task.sleep(for: .milliseconds(500))
+
+        let input = try XCTUnwrap(focusedTextInput(in: host.view))
+        let selection = try XCTUnwrap(input.selectedTextRange)
+        XCTAssertEqual(input.text(in: selection), "12.50")
+        XCTAssertNil(fixture.request)
+        input.insertText("7")
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(fixture.items[0].unitPrice, "7")
+        XCTAssertEqual(fixture.items[1].unitPrice, "80")
+    }
+
+    private func focusedTextInput(in view: UIView) -> (any UITextInput)? {
+        if view.isFirstResponder, let input = view as? any UITextInput { return input }
+        return view.subviews.lazy.compactMap { self.focusedTextInput(in: $0) }.first
+    }
+
     func testNativeCustomerAndItemFieldsRenderWithSelectedAddressesAndAccessibleLabels() async throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -107,3 +143,12 @@ final class InvoiceWizardLayoutTests: XCTestCase {
     }
     #endif
 }
+
+#if os(iOS)
+@MainActor
+@Observable
+private final class ItemPriceFocusFixture {
+    var items: [InvoiceDraft.Item] = [.init(unitPrice: "25"), .init(unitPrice: "80")]
+    var request: UUID?
+}
+#endif

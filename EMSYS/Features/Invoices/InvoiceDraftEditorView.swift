@@ -11,6 +11,8 @@ struct InvoiceDraftEditorView: View {
     @State private var showsSignature = false
     @State private var importsAttachment = false
     @State private var catalogSelection: CatalogSelection?
+    @State private var selectedCatalogItemRow: UUID?
+    @State private var priceFocusRequest: UUID?
 
     private struct CatalogSelection: Identifiable { let id: UUID }
 
@@ -82,9 +84,14 @@ struct InvoiceDraftEditorView: View {
                     Task { await model.loadCustomerDetails(online: connection.status != .unavailable) }
                 }
             }
-            .sheet(item: $catalogSelection) { selection in
+            .sheet(item: $catalogSelection, onDismiss: {
+                priceFocusRequest = selectedCatalogItemRow
+                selectedCatalogItemRow = nil
+            }) { selection in
                 InvoiceItemCatalogView(model: model) { selected in
-                    model.selectCatalogItem(selected, for: selection.id)
+                    if model.selectCatalogItem(selected, for: selection.id) {
+                        selectedCatalogItemRow = selection.id
+                    }
                     catalogSelection = nil
                 }
             }
@@ -226,7 +233,8 @@ struct InvoiceDraftEditorView: View {
         return Group {
             ForEach($model.content.items) { $item in
                 let itemID = item.id
-                InvoiceDraftItemFields(item: $item, canChooseCatalogItems: model.canChooseCatalogItems,
+                InvoiceDraftItemFields(item: $item, priceFocusRequest: $priceFocusRequest,
+                    canChooseCatalogItems: model.canChooseCatalogItems,
                     choose: { catalogSelection = CatalogSelection(id: itemID) },
                     remove: { model.removeItem(id: itemID) })
                     .disabled(!model.isLoaded || model.isSaving)
@@ -425,15 +433,18 @@ struct InvoiceDraftEditorView: View {
                 Picker("paymentReview.region", selection: Binding(
                     get: { model.content.paymentRegion ?? "" }, set: { model.content.paymentRegion = $0 }
                 )) {
-                    Text("invoiceCreation.chooseLocation").tag("")
+                    if model.content.paymentRegion?.isEmpty != false {
+                        Text("invoiceCreation.chooseLocation").tag("")
+                    }
                     if let code = model.content.paymentRegion, !code.isEmpty,
                        !model.paymentLocations.contains(where: { $0.code == code }) {
                         Text(verbatim: code).tag(code)
                     }
                     ForEach(model.paymentLocations) { branch in
-                        Text(verbatim: "\(branch.name ?? "") (\(branch.code ?? ""))").tag(branch.code ?? "")
+                        if let code = branch.code { Text(verbatim: code).tag(code) }
                     }
                 }
+                .pickerStyle(.menu)
                 Button("invoices.refresh") {
                     Task { await model.loadPaymentLocations(online: connection.status != .unavailable) }
                 }

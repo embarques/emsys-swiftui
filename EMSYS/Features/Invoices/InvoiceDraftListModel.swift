@@ -23,6 +23,7 @@ final class InvoiceDraftListModel: Identifiable {
     @ObservationIgnored private let canViewAssignments: (InvoiceAssignmentPermission) -> Bool
     @ObservationIgnored private let canReviewPayments: () -> Bool
     @ObservationIgnored private let financialPermission: (InvoiceFinancialPermission) -> Bool
+    @ObservationIgnored private let defaultPaymentRegion: String?
     @ObservationIgnored private let currentBranchID: () -> UInt16?
     let assignedOnly: Bool
 
@@ -32,6 +33,7 @@ final class InvoiceDraftListModel: Identifiable {
          canViewContainers: @escaping () -> Bool = { false },
          canViewAssignments: @escaping (InvoiceAssignmentPermission) -> Bool = { _ in false },
          canReviewPayments: @escaping () -> Bool = { false }, currentBranchID: @escaping () -> UInt16? = { nil },
+         defaultPaymentRegion: String? = nil,
          financialPermission: @escaping (InvoiceFinancialPermission) -> Bool = { _ in false },
          isAuthorized: @escaping () -> Bool) {
         self.canGeneratePool = canGeneratePool
@@ -46,6 +48,7 @@ final class InvoiceDraftListModel: Identifiable {
         self.canViewAssignments = canViewAssignments
         self.canReviewPayments = canReviewPayments
         self.currentBranchID = currentBranchID
+        self.defaultPaymentRegion = defaultPaymentRegion
         self.financialPermission = financialPermission
     }
 
@@ -59,7 +62,8 @@ final class InvoiceDraftListModel: Identifiable {
         InvoiceDraftEditorModel(assignedOnlyAccess: assignedOnly, draftID: draftID, store: store, client: client,
             canViewItemCatalog: canViewItemCatalog, canViewCustomers: canViewCustomers, canReviewPolicies: canReviewPolicies,
             canViewContainers: canViewContainers, canViewAssignments: canViewAssignments,
-            canReviewPayments: canReviewPayments, currentBranchID: currentBranchID, financialPermission: financialPermission, isAuthorized: isAuthorized)
+            canReviewPayments: canReviewPayments, currentBranchID: currentBranchID, defaultPaymentRegion: defaultPaymentRegion,
+            financialPermission: financialPermission, isAuthorized: isAuthorized)
     }
 
     func load(page: Int? = nil) async {

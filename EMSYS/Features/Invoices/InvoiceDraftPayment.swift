@@ -58,7 +58,7 @@ nonisolated struct InvoiceDraftPayment: Codable, Equatable, Sendable {
 
     private static func money(_ value: String) -> Double? {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        let parsed = trimmed.isEmpty ? 0 : Double(trimmed)
+        let parsed = trimmed.isEmpty ? 0 : Double(trimmed.replacingOccurrences(of: ",", with: "."))
         guard let parsed, parsed.isFinite, parsed >= 0, (parsed * 100).isFinite else { return nil }
         return (parsed * 100).rounded() / 100
     }

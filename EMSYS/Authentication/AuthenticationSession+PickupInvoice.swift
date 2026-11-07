@@ -49,7 +49,6 @@ extension AuthenticationSession {
         if assignedOnly {
             guard let sender = initial.senderCustomer else { throw APIClientError.invalidResponse }
             initial.assignedPickup = InvoiceAssignedPickup(pickupID: pickup.id, senderID: sender.id, receiverID: initial.receiverCustomer?.id)
-            initial.paymentRegion = user?.branch?.code
         }
         return InvoiceDraftEditorModel(assignedOnlyAccess: assignedOnly, initialContent: initial, store: access.store, client: access.client,
             canViewItemCatalog: { self.contextID == context && (self.permissions?.contains("canViewSettings", resourceType: "settings") == true || self.canCreateAssignedPickupInvoices) },
@@ -61,6 +60,7 @@ extension AuthenticationSession {
             },
             canReviewPayments: { self.contextID == context && self.permissions?.contains("canViewIncomeStatement", resourceType: "income_statement") == true },
             currentBranchID: { self.contextID == context ? self.user?.branch?.id : nil },
+            defaultPaymentRegion: user?.branch?.code,
             financialPermission: { self.canUsePickupInvoiceAccess(requiredAccess, context: context) && ($0 == .createInvoice || $0.isGranted(by: self.permissions)) },
             isAuthorized: { self.canUsePickupInvoiceAccess(requiredAccess, context: context) })
     }
@@ -84,7 +84,11 @@ extension AuthenticationSession {
             canViewItemCatalog: { self.contextID == context && (self.canCreateAssignedPickupInvoices || self.permissions?.contains("canViewSettings", resourceType: "settings") == true) },
             canViewCustomers: { self.contextID == context && !assignedOnly && self.canViewCustomers },
             canReviewPolicies: { self.contextID == context && (self.canCreateAssignedPickupInvoices || self.canReviewInvoicePolicies) },
+            canViewAssignments: { permission in
+                self.contextID == context && self.permissions?.contains(permission.name, resourceType: permission.resourceType) == true
+            },
             currentBranchID: { self.contextID == context ? self.user?.branch?.id : nil },
+            defaultPaymentRegion: user?.branch?.code,
             financialPermission: { self.canUsePickupInvoiceAccess(requiredAccess, context: context) && ($0 == .createInvoice || $0.isGranted(by: self.permissions)) },
             isAuthorized: { self.canUsePickupInvoiceAccess(requiredAccess, context: context) })
     }
