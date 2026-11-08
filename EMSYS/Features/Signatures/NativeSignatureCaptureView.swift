@@ -16,34 +16,51 @@ struct NativeSignatureCaptureView: UIViewRepresentable {
         canvas.isScrollEnabled = false
         canvas.backgroundColor = UIColor(white: 0.96, alpha: 1)
         canvas.overrideUserInterfaceStyle = .light
-        canvas.drawing = SignatureInk.nativeDrawing(drawing, in: canvas.drawingSize)
+        canvas.replaceDrawing(SignatureInk.nativeDrawing(drawing, in: canvas.drawingSize))
         return canvas
     }
 
     func updateUIView(_ canvas: SignatureInkCanvas, context: Context) {
         context.coordinator.drawing = $drawing
         if drawing != context.coordinator.lastPublished {
-            canvas.drawing = SignatureInk.nativeDrawing(drawing, in: canvas.drawingSize)
             context.coordinator.lastPublished = drawing
+            canvas.replaceDrawing(SignatureInk.nativeDrawing(drawing, in: canvas.drawingSize))
         }
     }
 
     final class Coordinator: NSObject, PKCanvasViewDelegate {
         var drawing: Binding<SignatureDrawing>
         var lastPublished: SignatureDrawing
+        private var isUsingTool = false
 
         init(drawing: Binding<SignatureDrawing>) {
             self.drawing = drawing
             lastPublished = drawing.wrappedValue
         }
 
+        func canvasViewDidBeginUsingTool(_ canvasView: PKCanvasView) {
+            isUsingTool = true
+        }
+
         func canvasViewDidEndUsingTool(_ canvasView: PKCanvasView) {
+            isUsingTool = false
+            publishDrawing(from: canvasView)
+        }
+
+        func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
+            // PencilKit can commit the final stroke after the tool-end callback.
+            guard !isUsingTool, let canvas = canvasView as? SignatureInkCanvas,
+                  !canvas.isReplacingDrawing else { return }
+            publishDrawing(from: canvasView)
+        }
+
+        private func publishDrawing(from canvasView: PKCanvasView) {
             guard let canvas = canvasView as? SignatureInkCanvas else { return }
-            // Convert at the end of a stroke, never by walking all ink per touch event.
             guard let captured = SignatureInk.capture(canvas.drawing, in: canvas.drawingSize) else {
-                canvas.drawing = SignatureInk.nativeDrawing(lastPublished, in: canvas.drawingSize)
+                canvas.replaceDrawing(SignatureInk.nativeDrawing(lastPublished, in: canvas.drawingSize))
                 return
             }
+            guard captured != lastPublished else { return }
             lastPublished = captured
             drawing.wrappedValue = captured
         }
@@ -54,14 +71,22 @@ final class SignatureInkCanvas: PKCanvasView {
     private(set) var drawingSize = CGSize(
         width: CGFloat(SignatureDrawing.defaultWidth), height: CGFloat(SignatureDrawing.defaultHeight))
 
+    private(set) var isReplacingDrawing = false
+
+    func replaceDrawing(_ replacement: PKDrawing) {
+        isReplacingDrawing = true
+        drawing = replacement
+        isReplacingDrawing = false
+    }
+
     override func layoutSubviews() {
         super.layoutSubviews()
         let nextSize = bounds.size
         guard nextSize.width > 0, nextSize.height > 0, nextSize != drawingSize else { return }
         // Resize existing ink with its paper instead of clearing or clipping it on rotation.
-        drawing = drawing.transformed(using: CGAffineTransform(
+        replaceDrawing(drawing.transformed(using: CGAffineTransform(
             scaleX: nextSize.width / drawingSize.width,
-            y: nextSize.height / drawingSize.height))
+            y: nextSize.height / drawingSize.height)))
         drawingSize = nextSize
         contentSize = nextSize
     }

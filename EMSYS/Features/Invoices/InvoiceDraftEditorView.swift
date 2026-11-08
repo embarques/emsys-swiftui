@@ -48,16 +48,18 @@ struct InvoiceDraftEditorView: View {
                 .background(.background, ignoresSafeAreaEdges: [])
             }
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("invoiceEdits.cancel") {
-                        if model.hasChanges { confirmsDiscard = true } else { dismiss() }
+                if model.creation == nil {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("invoiceEdits.cancel") {
+                            if model.hasChanges { confirmsDiscard = true } else { dismiss() }
+                        }
+                        .disabled(model.isSaving)
                     }
-                    .disabled(model.isSaving)
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("drafts.saveShort") { Task { await model.save() } }
-                        .accessibilityLabel(Text("drafts.save"))
-                        .disabled(!model.canSave)
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("drafts.saveShort") { Task { await model.save() } }
+                            .accessibilityLabel(Text("drafts.save"))
+                            .disabled(!model.canSave)
+                    }
                 }
             }
             .confirmationDialog("invoiceEdits.discardPrompt", isPresented: $confirmsDiscard) {
@@ -392,7 +394,22 @@ struct InvoiceDraftEditorView: View {
                     if let number = model.createdInvoiceNumber {
                         LabeledContent("invoiceCreation.number", value: number)
                     }
-                    LabeledContent("invoices.sender", value: operation.plan.content.senderName)
+                    let content = operation.plan.content
+                    LabeledContent("drafts.date", value: content.date.apiValue)
+                    LabeledContent("invoices.sender", value: content.senderName)
+                    if !content.receiverName.isEmpty {
+                        LabeledContent("invoices.receiver", value: content.receiverName)
+                    }
+                    ForEach(content.items) { item in
+                        LabeledContent {
+                            if let total = model.amounts?.lineTotals[item.id] {
+                                Text(total, format: .number.precision(.fractionLength(2))).monospacedDigit()
+                            }
+                        } label: {
+                            Text("\(item.quantity) × \(item.name)")
+                        }
+                    }
+                    Divider()
                     if let subtotal = model.amounts?.subtotal, let totals = model.paymentTotals {
                         LabeledContent("invoices.total") {
                             Text(subtotal - totals.discount, format: .number.precision(.fractionLength(2)))
@@ -407,6 +424,20 @@ struct InvoiceDraftEditorView: View {
                     LabeledContent(operation.state == .completed ? "invoices.payment" : "invoicePayment.plannedPayment") {
                         Text(totals.payment, format: .number.precision(.fractionLength(2))).monospacedDigit()
                     }
+                    .padding(AppStyle.Spacing.medium)
+                    .background(AppStyle.Colors.surface, in: .rect(cornerRadius: AppStyle.Layout.cornerRadius))
+                }
+                if let failure = operation.failure {
+                    VStack(alignment: .leading, spacing: AppStyle.Spacing.small) {
+                        Label(LocalizedStringKey(failure.stage.title), systemImage: "exclamationmark.circle")
+                        if let status = failure.status {
+                            Text("HTTP \(status.formatted(.number.grouping(.never)))")
+                                .font(.caption).foregroundStyle(.secondary)
+                        } else {
+                            Text("invoiceCreation.failure.receipt").font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(AppStyle.Spacing.medium)
                     .background(AppStyle.Colors.surface, in: .rect(cornerRadius: AppStyle.Layout.cornerRadius))
                 }
@@ -428,10 +459,6 @@ struct InvoiceDraftEditorView: View {
                             .disabled(!model.canRetryAttachments)
                     }
                 }
-                if operation.state != .completed {
-                    Button("invoiceCreation.retry") { Task { await model.retryCreation() } }
-                        .buttonStyle(.borderedProminent).disabled(model.isSaving)
-                }
             }
         }
         .padding(24)
@@ -444,10 +471,14 @@ struct InvoiceDraftEditorView: View {
             let layout = dynamicTypeSize.isAccessibilitySize
                 ? AnyLayout(VStackLayout(spacing: 12)) : AnyLayout(HStackLayout(spacing: 16))
             layout {
-                if model.creation != nil {
+                if let operation = model.creation {
                     VStack(spacing: 8) {
-                        if let createdDetail, let session, let preferences, session.canPrintInvoices {
+                        if let session, let preferences, session.canPrintInvoices {
+                            if createdDetail == nil {
+                                Text("invoiceCreation.printAfterSync").font(.caption).foregroundStyle(.secondary)
+                            }
                             Button {
+                                guard let createdDetail else { return }
                                 let contextID = session.contextID
                                 let language = preferences.language.rawValue
                                 let printedBy = session.user?.email ?? session.user?.name ?? ""
@@ -459,7 +490,16 @@ struct InvoiceDraftEditorView: View {
                                     .frame(maxWidth: .infinity, minHeight: 44)
                             }
                             .buttonStyle(.borderedProminent)
-                            .disabled(preview.isGenerating)
+                            .disabled(createdDetail == nil || preview.isGenerating)
+                        }
+                        if operation.state != .completed {
+                            Button {
+                                Task { await model.retryCreation() }
+                            } label: {
+                                Label("invoiceCreation.retry", systemImage: "arrow.trianglehead.clockwise.rotate.90")
+                                    .frame(maxWidth: .infinity, minHeight: 44)
+                            }
+                            .buttonStyle(.bordered)
                         }
                         Button("documents.close") { dismiss() }
                             .frame(maxWidth: .infinity, minHeight: 44)

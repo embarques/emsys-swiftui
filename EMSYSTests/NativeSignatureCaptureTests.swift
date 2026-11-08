@@ -42,6 +42,28 @@ final class NativeSignatureCaptureTests: XCTestCase {
         XCTAssertNil(SignatureInk.capture(PKDrawing(), in: .zero))
     }
 
+    func testStrokeCommittedAfterToolEndsIsIncludedInSavedDrawing() async throws {
+        var saved = SignatureDrawing()
+        let coordinator = NativeSignatureCaptureView.Coordinator(
+            drawing: Binding(get: { saved }, set: { saved = $0 }))
+        let canvas = SignatureInkCanvas()
+        canvas.drawing = SignatureInk.nativeDrawing(drawing, in: canvas.drawingSize)
+        coordinator.canvasViewDidBeginUsingTool(canvas)
+        coordinator.canvasViewDidEndUsingTool(canvas)
+        XCTAssertEqual(saved.strokes.count, 1)
+
+        var completed = drawing
+        completed.strokes.append([.init(x: 0.7, y: 0.2), .init(x: 0.7, y: 0.8)])
+        canvas.drawing = SignatureInk.nativeDrawing(completed, in: canvas.drawingSize)
+        coordinator.canvasViewDrawingDidChange(canvas)
+
+        XCTAssertEqual(saved.strokes.count, 2)
+        let finalStroke = try XCTUnwrap(saved.strokes.last)
+        XCTAssertEqual(finalStroke.last?.y ?? 0, 0.8, accuracy: 0.01)
+        let png = try await saved.pngData()
+        XCTAssertFalse(png.isEmpty)
+    }
+
     func testNativeStrokeCommitsToBindingAndClearAllowsRetry() throws {
         var saved = SignatureDrawing()
         let binding = Binding(get: { saved }, set: { saved = $0 })

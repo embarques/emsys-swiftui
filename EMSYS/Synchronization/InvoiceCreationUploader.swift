@@ -17,8 +17,10 @@ struct InvoiceCreationUploader {
             guard !operations.isEmpty else { break }
             for operation in operations {
                 try Task.checkCancellation()
+                var stage: PendingInvoiceCreation.Failure.Stage = .invoice
                 do {
                     if operation.invoiceRequest == nil, let journal = operation.journalRequest {
+                        stage = .payment
                         let path = operation.plan.content.assignedPickup.map { "journals/sync/assigned/\($0.pickupID)" } ?? "journals/sync"
                         let receipt = try await client.post(path, encodedBody: journal, as: InvoiceInitialPaymentReceipt.self)
                         try Task.checkCancellation()
@@ -26,26 +28,31 @@ struct InvoiceCreationUploader {
                     }
                     guard let current = try await store.invoiceCreation(draftID: operation.draftID),
                           current.state == .pending, let request = current.invoiceRequest else { continue }
+                    stage = .invoice
                     let path = current.plan.content.assignedPickup == nil ? "invoices/sync/create" : "invoices/sync/create-assigned"
                     let invoice = try await client.post(path, encodedBody: request, as: Invoice.self)
                     try Task.checkCancellation()
                     try await store.completeInvoiceCreation(id: operation.id, invoice: invoice)
                 } catch APIClientError.httpStatus(let status) where [400, 409, 422].contains(status) {
-                    try await store.setInvoiceCreationState(id: operation.id, state: .needsReview)
+                    try await store.setInvoiceCreationState(id: operation.id, state: .needsReview,
+                        failure: .init(stage: stage, status: status))
                     needsAttention = true
                 } catch APIClientError.httpStatus(let status) where [401, 403].contains(status) {
-                    try await store.setInvoiceCreationState(id: operation.id, state: .authorizationRequired)
+                    try await store.setInvoiceCreationState(id: operation.id, state: .authorizationRequired,
+                        failure: .init(stage: stage, status: status))
                     needsAttention = true
                 } catch APIClientError.httpStatus(let status) where [404, 405, 413].contains(status) {
                     // The new routes may not be deployed; ordinary creation or
                     // posting must never serve as an unsafe fallback.
-                    try await store.setInvoiceCreationState(id: operation.id, state: .serverUnavailable)
+                    try await store.setInvoiceCreationState(id: operation.id, state: .serverUnavailable,
+                        failure: .init(stage: stage, status: status))
                     needsAttention = true
                 } catch InvoiceCreationPlan.PlanError.invalidReceipt, InvoiceStore.StoreError.invalidCreationReceipt {
                     // A decoded but inconsistent acknowledgement needs explicit
                     // review. Keep frozen bytes and any confirmed payment, and
                     // allow unrelated queued invoices to continue uploading.
-                    try await store.setInvoiceCreationState(id: operation.id, state: .needsReview)
+                    try await store.setInvoiceCreationState(id: operation.id, state: .needsReview,
+                        failure: .init(stage: stage, status: nil))
                     needsAttention = true
                 }
             }

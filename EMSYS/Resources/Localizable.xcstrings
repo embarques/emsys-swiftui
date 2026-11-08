@@ -2381,6 +2381,75 @@
         }
       }
     },
+    "HTTP %@": {},
+    "invoiceCreation.failure.invoice": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invoice could not sync"
+          }
+        },
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La factura no pudo sincronizarse"
+          }
+        }
+      }
+    },
+    "invoiceCreation.failure.payment": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Initial payment could not sync"
+          }
+        },
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El pago inicial no pudo sincronizarse"
+          }
+        }
+      }
+    },
+    "invoiceCreation.failure.receipt": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The server response did not match the saved request."
+          }
+        },
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La respuesta del servidor no coincide con la solicitud guardada."
+          }
+        }
+      }
+    },
+    "invoiceCreation.printAfterSync": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Printing is available after the invoice syncs."
+          }
+        },
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Podrás imprimir cuando se sincronice la factura."
+          }
+        }
+      }
+    },
     "invoiceCreation.confirmedHint": {
       "extractionState": "manual",
       "localizations": {

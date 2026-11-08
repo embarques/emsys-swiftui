@@ -101,6 +101,8 @@ final class InvoiceCreationOutboxTests: XCTestCase {
         let reopened = try await open(directory)
         let blocked = try await reopened.invoiceCreation(draftID: operation.draftID)
         XCTAssertEqual(blocked?.state, .needsReview)
+        XCTAssertEqual(blocked?.failure?.stage, .invoice)
+        XCTAssertNil(blocked?.failure?.status)
         XCTAssertEqual(blocked?.invoiceRequest, operation.invoiceRequest)
         do { try await InvoiceCreationUploader(client: client, store: reopened).synchronize(); XCTFail("Review remains pending") }
         catch InvoiceCreationUploader.UploadError.attentionRequired { }
@@ -157,6 +159,8 @@ final class InvoiceCreationOutboxTests: XCTestCase {
         catch InvoiceCreationUploader.UploadError.attentionRequired { }
         let blocked = try await store.invoiceCreation(draftID: operation.draftID)
         XCTAssertEqual(blocked?.state, .serverUnavailable)
+        XCTAssertEqual(blocked?.failure?.stage, .payment)
+        XCTAssertEqual(blocked?.failure?.status, 404)
         XCTAssertEqual(CreationProtocol.paths, ["/v1/journals/sync"])
         do { try await InvoiceCreationUploader(client: client, store: store).synchronize(); XCTFail("Blocked work must remain visible") }
         catch InvoiceCreationUploader.UploadError.attentionRequired { }

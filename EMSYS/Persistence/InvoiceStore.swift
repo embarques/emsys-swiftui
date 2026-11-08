@@ -277,6 +277,9 @@ actor InvoiceStore {
                 CREATE TABLE invoicePoolActions (id TEXT PRIMARY KEY, payload BLOB NOT NULL, createdAt DOUBLE NOT NULL);
                 """)
         }
+        migrator.registerMigration("addInvoiceCreationFailure") { database in
+            try database.alter(table: "invoiceCreations") { $0.add(column: "failure", .blob) }
+        }
         try migrator.migrate(database)
         let savedEnvironment = try database.read { try String.fetchOne($0, sql: "SELECT apiEnvironment FROM invoiceCacheMetadata WHERE id = 1") }
         guard savedEnvironment == environment else { throw StoreError.invalidScope }
@@ -1051,11 +1054,13 @@ extension InvoiceStore {
         try database.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM invoiceCreations WHERE state != 'completed' \(assignedOnly ? "AND assignedOnly = 1" : "")") ?? 0 }
     }
 
-    func setInvoiceCreationState(id: UUID, state: PendingInvoiceCreation.State) throws {
+    func setInvoiceCreationState(id: UUID, state: PendingInvoiceCreation.State,
+                                 failure: PendingInvoiceCreation.Failure? = nil) throws {
         guard state != .completed else { throw StoreError.invalidDraft }
+        let failureData = try failure.map { try JSONEncoder().encode($0) }
         try database.write {
-            try $0.execute(sql: "UPDATE invoiceCreations SET state = ? WHERE id = ? AND state != 'completed'",
-                           arguments: [state.rawValue, id.uuidString])
+            try $0.execute(sql: "UPDATE invoiceCreations SET state = ?, failure = ? WHERE id = ? AND state != 'completed'",
+                           arguments: [state.rawValue, failureData, id.uuidString])
         }
     }
 
@@ -1123,8 +1128,10 @@ extension InvoiceStore {
               invoiceHash == invoice.map({ Data(SHA256.hash(data: $0)) }),
               plan.invoiceRequestID == id, journal != nil || invoice != nil,
               (journal?.count ?? 0) <= 3 * 1024 * 1024, (invoice?.count ?? 0) <= 3 * 1024 * 1024 else { throw StoreError.invalidDraft }
+        let failureData: Data? = row["failure"]
         return PendingInvoiceCreation(id: id, draftID: draftID, state: state, plan: plan,
-            journalRequest: journal, invoiceRequest: invoice, invoiceID: row["invoiceID"])
+            journalRequest: journal, invoiceRequest: invoice, invoiceID: row["invoiceID"],
+            failure: try failureData.map { try JSONDecoder().decode(PendingInvoiceCreation.Failure.self, from: $0) })
     }
 
     func saveInvoiceBankAccounts(_ accounts: [InvoiceBankAccount]) throws {
