@@ -133,6 +133,8 @@ final class InvoiceCreationOutboxTests: XCTestCase {
         let blocked = try await reopened.invoiceCreation(draftID: paid.draftID)
         XCTAssertEqual(blocked?.state, .needsReview)
         XCTAssertEqual(blocked?.journalRequest, paid.journalRequest)
+        XCTAssertEqual(blocked?.paymentReceipt?.incomeStatement.id, 7)
+        XCTAssertEqual(blocked?.paymentReceipt?.transactionAmount, 5)
         let frozenInvoice = try XCTUnwrap(blocked?.invoiceRequest)
         let otherCompleted = try await reopened.invoiceCreation(draftID: other.draftID)
         XCTAssertEqual(otherCompleted?.state, .completed)
@@ -170,7 +172,8 @@ final class InvoiceCreationOutboxTests: XCTestCase {
 
         let document = try await editor.printSavedCreation(language: "en", printedBy: "Fixture")
         let pdf = try XCTUnwrap(PDFDocument(data: document.pdf)?.string)
-        XCTAssertTrue(pdf.contains("Saved locally - pending sync"))
+        XCTAssertFalse(pdf.contains("Saved locally - pending sync"))
+        XCTAssertTrue(pdf.contains("Fixture Worker"))
         XCTAssertTrue(pdf.contains("Fixture box"))
         XCTAssertEqual(CreationProtocol.paths, ["/v1/journals/sync"])
 

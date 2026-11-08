@@ -25,7 +25,12 @@ struct InvoiceDraftEditorView: View {
         NavigationStack {
             Group {
                 if model.isAvailable {
-                    if model.creation != nil { ScrollView { creationStatus } } else { editorForm }
+                    if model.creation != nil {
+                        ScrollView { creationStatus }
+                            .background(confirmationBackground.ignoresSafeArea())
+                    } else {
+                        editorForm
+                    }
                 } else {
                     ContentUnavailableView("auth.unavailable", systemImage: "lock")
                 }
@@ -402,27 +407,106 @@ struct InvoiceDraftEditorView: View {
         return branch
     }
 
-    private var creationStatus: some View {
-        VStack(spacing: 20) {
-            if let operation = model.creation {
-                VStack(alignment: .leading, spacing: 12) {
-                    Label(LocalizedStringKey(operation.state.title),
-                          systemImage: operation.state == .completed ? "checkmark.circle.fill" : "clock.arrow.circlepath")
-                        .font(.title2.bold())
-                        .foregroundStyle(AppStyle.Colors.accent)
-                    Text(operation.state == .completed ? "invoiceCreation.confirmedHint" : "invoiceCreation.pendingHint")
-                        .foregroundStyle(.secondary)
-                    Divider()
+    private var confirmationBackground: Color {
+        #if os(macOS)
+        Color(nsColor: .windowBackgroundColor)
+        #else
+        Color(uiColor: .systemGroupedBackground)
+        #endif
+    }
+
+    private var confirmationCardBackground: Color {
+        #if os(macOS)
+        Color(nsColor: .controlBackgroundColor)
+        #else
+        Color(uiColor: .secondarySystemGroupedBackground)
+        #endif
+    }
+
+    private func confirmationCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        content()
+            .padding(AppStyle.Spacing.medium)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(confirmationCardBackground, in: .rect(cornerRadius: 20))
+            .overlay { RoundedRectangle(cornerRadius: 20).strokeBorder(.quaternary) }
+    }
+
+    private func confirmationSummary(_ operation: PendingInvoiceCreation) -> some View {
+        let completed = operation.state == .completed
+        let pending = operation.state == .pending
+        let tint: Color = completed ? .green : pending ? AppStyle.Colors.accent : .orange
+        return confirmationCard {
+            VStack(spacing: AppStyle.Spacing.small) {
+                Text(LocalizedStringKey(operation.state.title))
+                    .font(.title2.bold())
+                    .accessibilityAddTraits(.isHeader)
+                Text(completed ? "invoiceCreation.confirmedHint" : "invoiceCreation.pendingHint")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                Divider().padding(.vertical, 4)
+                VStack(alignment: .leading, spacing: 8) {
                     if let number = model.createdInvoiceNumber {
-                        LabeledContent("invoiceCreation.number", value: number)
+                        LabeledContent("invoiceCreation.number") {
+                            Text(number).fontWeight(.semibold).monospacedDigit()
+                        }
                     }
-                    let content = operation.plan.content
-                    LabeledContent("drafts.date", value: content.date.apiValue)
+                    if let subtotal = model.amounts?.subtotal, let totals = model.paymentTotals {
+                        LabeledContent("invoices.total") {
+                            Text(subtotal - totals.discount, format: .number.precision(.fractionLength(2)))
+                                .font(.title3.bold()).monospacedDigit()
+                        }
+                    }
+                    if operation.plan.requiresJournal, operation.paymentReceipt == nil, let totals = model.paymentTotals {
+                        LabeledContent("invoicePayment.plannedPayment") {
+                            Text(totals.payment, format: .number.precision(.fractionLength(2))).monospacedDigit()
+                        }
+                    }
+                }
+                .multilineTextAlignment(.leading)
+            }
+            .multilineTextAlignment(.center)
+            .padding(.top, 30)
+        }
+        .overlay(alignment: .top) {
+            Image(systemName: completed ? "checkmark" : pending ? "clock.arrow.circlepath" : "exclamationmark")
+                .font(.system(size: 26, weight: .semibold))
+                .foregroundStyle(tint)
+                .frame(width: 66, height: 66)
+                .background(tint.opacity(0.16), in: .circle)
+                .background(confirmationCardBackground, in: .circle)
+                .overlay { Circle().strokeBorder(confirmationCardBackground, lineWidth: 4) }
+                .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
+                .offset(y: -33)
+                .accessibilityHidden(true)
+        }
+        .padding(.top, 33)
+    }
+
+    private func confirmationDetails(_ operation: PendingInvoiceCreation) -> some View {
+        let content = operation.plan.content
+        return VStack(spacing: AppStyle.Spacing.medium) {
+            confirmationCard {
+                VStack(alignment: .leading, spacing: 12) {
+                    Label("invoices.detailTitle", systemImage: "doc.text")
+                        .font(.headline).accessibilityAddTraits(.isHeader)
                     LabeledContent("invoices.sender", value: content.senderName)
                     if !content.receiverName.isEmpty {
                         LabeledContent("invoices.receiver", value: content.receiverName)
                     }
+                    Divider()
+                    LabeledContent {
+                        Text(content.date.apiValue)
+                    } label: {
+                        Label("drafts.date", systemImage: "calendar")
+                    }
+                }
+            }
+            confirmationCard {
+                VStack(alignment: .leading, spacing: 12) {
+                    Label("invoiceCreation.step.items", systemImage: "shippingbox")
+                        .font(.headline).accessibilityAddTraits(.isHeader)
                     ForEach(content.items) { item in
+                        Divider()
                         LabeledContent {
                             if let total = model.amounts?.lineTotals[item.id] {
                                 Text(total, format: .number.precision(.fractionLength(2))).monospacedDigit()
@@ -431,42 +515,54 @@ struct InvoiceDraftEditorView: View {
                             Text("\(item.quantity) × \(item.name)")
                         }
                     }
-                    Divider()
-                    if let subtotal = model.amounts?.subtotal, let totals = model.paymentTotals {
-                        LabeledContent("invoices.total") {
-                            Text(subtotal - totals.discount, format: .number.precision(.fractionLength(2)))
-                                .bold().monospacedDigit()
-                        }
-                    }
                 }
-                .padding(AppStyle.Spacing.medium)
-                .background(AppStyle.Colors.surface, in: .rect(cornerRadius: AppStyle.Layout.cornerRadius))
+            }
+        }
+    }
 
-                if operation.plan.requiresJournal, let totals = model.paymentTotals {
-                    LabeledContent(operation.state == .completed ? "invoices.payment" : "invoicePayment.plannedPayment") {
-                        Text(totals.payment, format: .number.precision(.fractionLength(2))).monospacedDigit()
-                    }
-                    .padding(AppStyle.Spacing.medium)
-                    .background(AppStyle.Colors.surface, in: .rect(cornerRadius: AppStyle.Layout.cornerRadius))
-                }
-                if let failure = operation.failure {
-                    VStack(alignment: .leading, spacing: AppStyle.Spacing.small) {
-                        Label(LocalizedStringKey(failure.stage.title), systemImage: "exclamationmark.circle")
-                        if failure.requiresCloseout {
-                            Text(closeoutBranch == nil ? "invoiceCreation.closeout.ask" : "invoiceCreation.closeout.required")
-                                .font(.callout).foregroundStyle(.secondary)
-                        } else if let message = failure.message, !message.isEmpty {
-                            Text(verbatim: message).font(.callout).foregroundStyle(.secondary)
-                        } else if let status = failure.status {
-                            Text("HTTP \(status.formatted(.number.grouping(.never)))")
-                                .font(.caption).foregroundStyle(.secondary)
-                        } else {
-                            Text("invoiceCreation.failure.receipt").font(.caption).foregroundStyle(.secondary)
+    private var creationStatus: some View {
+        VStack(spacing: 20) {
+            if let operation = model.creation {
+                confirmationSummary(operation)
+                if let receipt = operation.paymentReceipt {
+                    confirmationCard {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Label("invoiceCreation.paymentRecorded", systemImage: "checkmark.circle.fill")
+                                .font(.headline).foregroundStyle(.green)
+                            LabeledContent("navigation.dailyIncome") {
+                                Text(verbatim: "#\(receipt.incomeStatement.id)").monospacedDigit()
+                            }
+                            LabeledContent("invoices.payment") {
+                                Text(receipt.transactionAmount, format: .number.precision(.fractionLength(2)))
+                                    .fontWeight(.semibold).monospacedDigit()
+                            }
+                            if let method = operation.plan.content.payment?.method {
+                                LabeledContent("invoicePayment.method") {
+                                    Text(LocalizedStringKey(method.title))
+                                }
+                            }
                         }
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(AppStyle.Spacing.medium)
-                    .background(AppStyle.Colors.surface, in: .rect(cornerRadius: AppStyle.Layout.cornerRadius))
+                }
+                confirmationDetails(operation)
+                if let failure = operation.failure {
+                    confirmationCard {
+                        VStack(alignment: .leading, spacing: AppStyle.Spacing.small) {
+                            Label(LocalizedStringKey(failure.stage.title), systemImage: "exclamationmark.circle")
+                                .font(.headline).foregroundStyle(.orange)
+                            if failure.requiresCloseout {
+                                Text(closeoutBranch == nil ? "invoiceCreation.closeout.ask" : "invoiceCreation.closeout.required")
+                                    .font(.callout).foregroundStyle(.secondary)
+                            } else if let message = failure.message, !message.isEmpty {
+                                Text(verbatim: message).font(.callout).foregroundStyle(.secondary)
+                            } else if let status = failure.status {
+                                Text("HTTP \(status.formatted(.number.grouping(.never)))")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            } else {
+                                Text("invoiceCreation.failure.receipt").font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
                 }
                 if let issue = model.issue { Text(LocalizedStringKey(issue)) }
                 if !model.attachmentStatuses.isEmpty {
@@ -488,8 +584,9 @@ struct InvoiceDraftEditorView: View {
                 }
             }
         }
-        .padding(24)
-        .frame(maxWidth: 640)
+        .padding(.horizontal, AppStyle.Spacing.medium)
+        .padding(.vertical, AppStyle.Spacing.large)
+        .frame(maxWidth: AppStyle.Layout.readableContentWidth)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 

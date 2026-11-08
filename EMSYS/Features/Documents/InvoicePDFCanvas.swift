@@ -28,19 +28,43 @@ nonisolated struct InvoicePDFCanvas {
         context.fill(CGRect(x: 0, y: 0, width: width, height: height))
         context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
         let encoded = NSMutableData()
-        guard let flattened = context.makeImage(),
+        guard let raster = context.makeImage(),
               let destination = CGImageDestinationCreateWithData(encoded, UTType.jpeg.identifier as CFString, 1, nil) else {
             throw InvoicePDFRenderer.RenderError.missingAssets
         }
+        let flattened = name == .senderSignature ? croppedSignature(raster, in: context) : raster
         CGImageDestinationAddImage(destination, flattened, [kCGImageDestinationLossyCompressionQuality: 1] as CFDictionary)
         guard CGImageDestinationFinalize(destination) else { throw InvoicePDFRenderer.RenderError.missingAssets }
         let hex = (encoded as Data).map { String(format: "%02X", $0) }.joined() + ">"
-        let object = "<< /Type /XObject /Subtype /Image /Width \(width) /Height \(height) /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter [/ASCIIHexDecode /DCTDecode] /Length \(hex.utf8.count) >>\nstream\n\(hex)\nendstream"
-        images[name] = ImageAsset(object: object, width: width, height: height)
+        let object = "<< /Type /XObject /Subtype /Image /Width \(flattened.width) /Height \(flattened.height) /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter [/ASCIIHexDecode /DCTDecode] /Length \(hex.utf8.count) >>\nstream\n\(hex)\nendstream"
+        images[name] = ImageAsset(object: object, width: flattened.width, height: flattened.height)
+    }
+
+    private func croppedSignature(_ image: CGImage, in context: CGContext) -> CGImage {
+        guard let bytes = context.data?.assumingMemoryBound(to: UInt8.self) else { return image }
+        var left = image.width
+        var right = -1
+        var top = image.height
+        var bottom = -1
+        for y in 0..<image.height {
+            for x in 0..<image.width {
+                let pixel = bytes + y * context.bytesPerRow + x * 4
+                if pixel[0] < 250 || pixel[1] < 250 || pixel[2] < 250 {
+                    left = min(left, x)
+                    right = max(right, x)
+                    top = min(top, y)
+                    bottom = max(bottom, y)
+                }
+            }
+        }
+        guard right >= left else { return image }
+        let bounds = CGRect(x: 0, y: 0, width: image.width, height: image.height)
+        let ink = CGRect(x: left, y: top, width: right - left + 1, height: bottom - top + 1)
+        return image.cropping(to: ink.insetBy(dx: -2, dy: -2).intersection(bounds)) ?? image
     }
 
     mutating func image(x: Double, y: Double, width: Double, height: Double,
-                        named name: ImageName = .logo, preserveAspectRatio: Bool = false) {
+                        named name: ImageName = .logo, preserveAspectRatio: Bool = false, alignBottom: Bool = false) {
         guard let asset = images[name] else { return }
         var x = x; var y = y; var width = width; var height = height
         if preserveAspectRatio {
@@ -48,7 +72,7 @@ nonisolated struct InvoicePDFCanvas {
             let fittedWidth = Double(asset.width) * scale
             let fittedHeight = Double(asset.height) * scale
             x += (width - fittedWidth) / 2
-            y += (height - fittedHeight) / 2
+            y += alignBottom ? height - fittedHeight : (height - fittedHeight) / 2
             width = fittedWidth
             height = fittedHeight
         }

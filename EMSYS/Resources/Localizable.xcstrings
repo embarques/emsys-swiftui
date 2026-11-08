@@ -2569,6 +2569,23 @@
         }
       }
     },
+    "invoiceCreation.paymentRecorded": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Initial payment recorded"
+          }
+        },
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pago inicial registrado"
+          }
+        }
+      }
+    },
     "invoiceCreation.confirmedHint": {
       "extractionState": "manual",
       "localizations": {

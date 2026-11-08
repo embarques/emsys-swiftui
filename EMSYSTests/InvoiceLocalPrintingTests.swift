@@ -34,7 +34,7 @@ final class InvoiceLocalPrintingTests: XCTestCase {
             XCTAssertEqual(page.bounds(for: .mediaBox), CGRect(x: 0, y: 0, width: 612, height: 792))
             let authorization = try XCTUnwrap(pdf.findString("Authorizado por", withOptions: []).first { $0.pages.contains(page) }?.bounds(for: page))
             let terms = try XCTUnwrap(pdf.findString("Al autorizar este servicio", withOptions: []).first { $0.pages.contains(page) }?.bounds(for: page))
-            XCTAssertGreaterThan(terms.minY, 110, "Terms must end above the reserved signature area")
+            XCTAssertGreaterThan(terms.minY, 90, "Terms must end above the reserved signature area")
             XCTAssertLessThan(authorization.maxY, 65)
         }
         #if os(macOS)
@@ -56,7 +56,7 @@ final class InvoiceLocalPrintingTests: XCTestCase {
         XCTAssertEqual(pdf.pageCount, 1)
         XCTAssertEqual(pdf.page(at: 0)?.bounds(for: .mediaBox), CGRect(x: 0, y: 0, width: 612, height: 792))
         let text = try XCTUnwrap(pdf.string)
-        for expected in ["INV-TEST-001", "10/24/2026", "$10.00", "$1.00", "$2.00", "$3.00", "$8.00", "Caja de ropa", "2A", "By authorizing this service", "Pagina 1/1"] {
+        for expected in ["INV-TEST-001", "10/24/2026", "$10.00", "$1.00", "$2.00", "$3.00", "$8.00", "Caja de ropa", "2A", "By authorizing this service", "Recibido por", "Pagina 1/1"] {
             XCTAssertTrue(text.contains(expected), expected)
         }
         XCTAssertFalse(text.contains("Al autorizar"))

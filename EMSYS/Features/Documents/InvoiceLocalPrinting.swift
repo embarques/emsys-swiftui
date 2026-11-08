@@ -73,13 +73,23 @@ nonisolated enum InvoiceLocalPrinting {
             }
             let id = operation.plan.reservation?.id ?? operation.id.uuidString
             let number = operation.plan.reservation?.number
+            let receipt = operation.paymentReceipt
+            let noPayment = !operation.plan.requiresJournal
+            let payment = receipt?.invoice.payment ?? (noPayment ? 0 : nil)
+            let balance = receipt?.invoice.balance ?? (noPayment ? amounts.subtotal - discount : nil)
             var invoice = Invoice(id: id, number: number, date: content.date.apiValue,
                 sender: try party(content.senderWriteSnapshot, addressID: content.senderAddressID, name: content.senderName),
                 receiver: try party(content.receiverWriteSnapshot, addressID: content.receiverAddressID, name: content.receiverName),
-                cost: Decimal(amounts.subtotal), payment: nil, balance: nil, invoiceDetails: items)
+                cost: Decimal(amounts.subtotal), payment: payment.map { Decimal($0) },
+                balance: balance.map { Decimal($0) }, invoiceDetails: items)
             invoice.discount = Decimal(discount)
             invoice.container = content.container.map { .init(name: $0.name, id: UInt16(exactly: $0.id), containerNumber: $0.containerNumber) }
-            invoice.paidStatus = "-"
+            if let route = content.pickupRoute {
+                invoice.receivedBy = .init(type: "route", name: route.displayName)
+            } else if let employee = content.pickupEmployee {
+                invoice.receivedBy = .init(type: "employee", name: employee.name)
+            }
+            if balance == nil { invoice.paidStatus = "-" }
             let signature = content.confirmation?.skipSignature == true ? nil : content.senderSignature?.pngData
             let pdf = try InvoicePDFRenderer(invoice: invoice, company: company, language: language,
                 printedBy: printedBy, senderSignaturePNG: signature, isPendingSync: true).render()

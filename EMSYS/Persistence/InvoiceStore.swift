@@ -1129,9 +1129,11 @@ extension InvoiceStore {
               plan.invoiceRequestID == id, journal != nil || invoice != nil,
               (journal?.count ?? 0) <= 3 * 1024 * 1024, (invoice?.count ?? 0) <= 3 * 1024 * 1024 else { throw StoreError.invalidDraft }
         let failureData: Data? = row["failure"]
+        let receiptData: Data? = row["journalReceipt"]
         return PendingInvoiceCreation(id: id, draftID: draftID, state: state, plan: plan,
             journalRequest: journal, invoiceRequest: invoice, invoiceID: row["invoiceID"],
-            failure: try failureData.map { try JSONDecoder().decode(PendingInvoiceCreation.Failure.self, from: $0) })
+            failure: try failureData.map { try JSONDecoder().decode(PendingInvoiceCreation.Failure.self, from: $0) },
+            paymentReceipt: try receiptData.map { try JSONDecoder().decode(InvoiceInitialPaymentReceipt.self, from: $0) })
     }
 
     func saveInvoiceBankAccounts(_ accounts: [InvoiceBankAccount]) throws {

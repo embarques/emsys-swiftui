@@ -26,4 +26,5 @@ nonisolated struct PendingInvoiceCreation: Identifiable, Sendable {
     let invoiceRequest: Data?
     let invoiceID: String?
     var failure: Failure? = nil
+    var paymentReceipt: InvoiceInitialPaymentReceipt? = nil
 }

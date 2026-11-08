@@ -26,7 +26,7 @@ nonisolated struct InvoicePDFRenderer {
         if let senderSignaturePNG { try canvas.addImage(senderSignaturePNG, named: .senderSignature) }
         let notice = authorizationNotice
         let noticeLines = InvoicePDFCanvas.lines(notice, width: 195.9, font: .regular, size: 8)
-        let bottom = 279.4 - 23 - Double(noticeLines.count) * 3.5 - 4 - (senderSignaturePNG == nil ? 0 : 18)
+        let bottom = 279.4 - (senderSignaturePNG == nil ? 18.5 : 30.5) - Double(noticeLines.count) * 3.5 - 4
         var y = context(&canvas)
         guard y <= bottom else { throw RenderError.oversizedContent }
         for item in invoice.invoiceDetails ?? [] {
@@ -79,11 +79,6 @@ nonisolated struct InvoicePDFRenderer {
         canvas.cell(company.name, x: hasLogo ? 88 : 10, y: 13, width: 74, height: 7, font: .bold, size: 16)
         canvas.cell("No. " + (invoice.number ?? "-"), x: 153.9, y: 13, width: 52, height: 7, font: .bold, size: 16, align: "R")
         var y = hasLogo ? 38.0 : 24.0
-        if isPendingSync {
-            let notice = language == "en" ? "Saved locally - pending sync" : "Guardada localmente - pendiente de sincronizar"
-            canvas.cell(notice, x: 10, y: y, width: 195, height: 6, font: .bold, size: 11)
-            y += 8
-        }
         let date = invoice.calendarDate.map { format($0, pattern: "MM/dd/yyyy", zone: .gmt) } ?? "-"
         let received = receivedBy
         for (label, value) in [("Fecha", date), ("Furgon", invoice.container?.name ?? "-"), received] {
@@ -119,7 +114,8 @@ nonisolated struct InvoicePDFRenderer {
         tableHeader(&canvas, ["Pendiente", "Costo", "Descuento", "Recargo", "Pago", "Balance"], widths: summaryWidths, y: y)
         y += 7
         let status = invoice.paidStatus.flatMap { $0.isEmpty ? nil : $0 } ?? ((invoice.balance ?? 0) <= 0 ? "PAGADA" : (invoice.payment ?? 0) > 0 ? "PARCIAL" : "PENDIENTE")
-        let values = [status, money(invoice.cost), money(invoice.discount), money(invoice.surcharge), isPendingSync ? "-" : money(invoice.payment), isPendingSync ? "-" : money(invoice.balance)]
+        let values = [status, money(invoice.cost), money(invoice.discount), money(invoice.surcharge), isPendingSync && invoice.payment == nil ? "-" : money(invoice.payment),
+                      isPendingSync && invoice.balance == nil ? "-" : money(invoice.balance)]
         var x = 10.0
         for index in summaryWidths.indices {
             canvas.line(x, y, x, y + 6)
@@ -151,17 +147,25 @@ nonisolated struct InvoicePDFRenderer {
 
     private func footer(_ canvas: inout InvoicePDFCanvas, page: Int, count: Int) {
         if senderSignaturePNG != nil {
-            canvas.image(x: 70, y: 240.4, width: 55, height: 17,
-                         named: .senderSignature, preserveAspectRatio: true)
+            canvas.image(x: 72, y: 249.9, width: 51, height: 12,
+                         named: .senderSignature, preserveAspectRatio: true, alignBottom: true)
         }
-        for (x, width, title) in [(10.0, 55.0, "Preparado por"), (70, 55, "Authorizado por"), (130, 75, "Recibido por/ Fecha/ ID")] {
-            canvas.line(x, 258.4, x + width, 258.4)
-            canvas.cell(title, x: x, y: 259.4, width: width, height: 4, font: .bold, size: 12, align: "C")
+        for (x, width, title) in [(10.0, 55.0, "Preparado por"), (70, 55, "Authorizado por"), (130, 75, "Recibido por")] {
+            canvas.line(x, 262.9, x + width, 262.9)
+            canvas.cell(title, x: x, y: 263.9, width: width, height: 4, font: .bold, size: 12, align: "C")
         }
-        canvas.cell("Fecha de Impresion: " + format(now, pattern: "MM/dd/yyyy hh:mm:ss a", zone: timezone), x: 10, y: 266.9, width: 95, height: 5, font: .italic, size: 8)
-        canvas.cell("Impresa por: " + printedBy, x: 105, y: 266.9, width: 100.9, height: 5, font: .italic, size: 8, align: "R")
-        canvas.cell("Pagina \(page)/\(count)", x: 10, y: 271.4, width: 195.9, height: 3, size: 8, align: "C")
-        if count > 1 { canvas.cell("\(page)/\(count)", x: 170.9, y: 271.4, width: 35, height: 3, size: 8, align: "R") }
+        let metadataY = 271.4
+        canvas.cell("Fecha de Impresion: " + format(now, pattern: "MM/dd/yyyy hh:mm:ss a", zone: timezone),
+                    x: 10, y: metadataY, width: 80, height: 3, font: .italic, size: 8)
+        canvas.cell("Pagina \(page)/\(count)", x: 90, y: metadataY, width: 30, height: 3, size: 8, align: "C")
+        if count > 1 {
+            canvas.cell("\(page)/\(count)", x: 120, y: metadataY, width: 15, height: 3, size: 8, align: "R")
+        }
+        let attribution = "Impresa por: " + printedBy
+        let width = 70.9
+        let measured = InvoicePDFCanvas.width(attribution, font: .italic, size: 8)
+        let size = measured > width - 2 ? 8 * (width - 2) / measured : 8
+        canvas.cell(attribution, x: 135, y: metadataY, width: width, height: 3, font: .italic, size: size, align: "R")
     }
 
     private var receivedBy: (String, String) {
