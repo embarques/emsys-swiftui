@@ -150,6 +150,31 @@ final class InvoiceDraftEditorModel: Identifiable {
     private(set) var poolThreshold = 10
     private(set) var availableReservations = 0
     private(set) var nextInvoiceNumber: String?
+    private(set) var createdInvoice: Invoice?
+
+    func acknowledgeUploadRequest() {
+        didQueueCreation = false
+    }
+
+    func refreshCreation() async {
+        guard isAvailable, creation != nil else { return }
+        do {
+            guard let submission = try await store.invoiceCreation(draftID: draftID) else { return }
+            let invoice = if let id = submission.invoiceID { try await store.invoice(id: id) } else { nil as Invoice? }
+            guard isAvailable, !Task.isCancelled else { return }
+            creation = submission
+            createdInvoice = invoice
+            createdInvoiceNumber = invoice?.number ?? submission.plan.reservation?.number
+        } catch {
+            if isAvailable, !Task.isCancelled { issue = "drafts.loadError" }
+        }
+    }
+
+    func makeCreatedInvoiceDetail() -> InvoiceDetailModel? {
+        guard isAvailable, let createdInvoice, let client else { return nil }
+        return InvoiceDetailModel(invoice: createdInvoice, client: client, store: store)
+    }
+
     var canQueueCreation: Bool {
         isAvailable && nextInvoiceNumber != nil && financialPermission(.createInvoice) && creation == nil && isLoaded
             && !isSaving && !isLoading && !isPreparingSignature && !isLoadingCustomerDetails && !isLoadingPolicies
@@ -779,6 +804,7 @@ final class InvoiceDraftEditorModel: Identifiable {
             creation = submission
             await refreshAttachmentStatuses()
             guard isAuthorized(), !Task.isCancelled else { return }
+            createdInvoice = created
             createdInvoiceNumber = created?.number ?? submission?.plan.reservation?.number
             content = draft.content
             applyPaymentDefaults()

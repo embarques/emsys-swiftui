@@ -1,44 +1,36 @@
 import SwiftUI
 
 struct InvoicePaymentFields: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.locale) private var locale
     @Environment(NetworkConnection.self) private var connection
     @Bindable var model: InvoiceDraftEditorModel
 
     var body: some View {
         Section {
-            Toggle(isOn: Binding(
-                get: { model.content.payment?.mode == .record },
-                set: { model.setPaymentMode($0 ? .record : .skip) }
-            )) {
-                VStack(alignment: .leading, spacing: AppStyle.Spacing.small) {
-                    Text("invoicePayment.recordShort")
-                    Text(model.content.payment?.mode == .record ? "invoicePayment.yes" : "invoicePayment.no")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .accessibilityHidden(true)
+            let recordsPayment = model.content.payment?.mode == .record
+            VStack(alignment: .leading, spacing: AppStyle.Spacing.small) {
+                Button {
+                    model.setPaymentMode(recordsPayment ? .skip : .record)
+                } label: {
+                    Label("invoicePayment.recordShort", systemImage: recordsPayment ? "checkmark.square.fill" : "square")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                        .contentShape(Rectangle())
                 }
-            }
-            .toggleStyle(.switch)
-            .disabled(model.isSaving || (!model.canRecordPayment && model.content.payment?.mode != .record))
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(recordsPayment ? .isSelected : [])
+                .disabled(model.isSaving || (!model.canRecordPayment && !recordsPayment))
 
-            if model.content.payment?.mode == .record {
-                amountEntry
+                if recordsPayment {
+                    VStack(alignment: .leading, spacing: AppStyle.Spacing.medium) {
+                        amountEntry
+                        paymentMethodChoices
+                    }
                     .disabled(!model.canRecordPayment || model.isSaving)
-                Picker("invoicePayment.method", selection: Binding(
-                    get: { model.content.payment?.method },
-                    set: { model.setPaymentMethod($0) }
-                )) {
-                    if model.content.payment?.method == nil {
-                        Text("invoicePayment.methodRequired").tag(nil as InvoiceDraftPayment.Method?)
-                    }
-                    ForEach(InvoiceDraftPayment.Method.allCases) { method in
-                        Label(LocalizedStringKey(method.title), systemImage: method.symbol).tag(Optional(method))
-                    }
                 }
-                .pickerStyle(.menu)
-                .disabled(!model.canRecordPayment || model.isSaving)
             }
+            .listRowBackground(AppStyle.Colors.accent.opacity(0.12))
         }
         if model.content.payment?.mode == .record {
             if model.content.payment?.method != nil {
@@ -71,6 +63,43 @@ struct InvoicePaymentFields: View {
             }
         } footer: {
             Text("invoicePayment.localHint")
+        }
+    }
+
+    private var paymentMethodChoices: some View {
+        let columns = [GridItem(
+            dynamicTypeSize.isAccessibilitySize ? .flexible() : .adaptive(minimum: 132),
+            spacing: AppStyle.Spacing.small
+        )]
+        return VStack(alignment: .leading, spacing: AppStyle.Spacing.small) {
+            Text("invoicePayment.method").font(.subheadline.weight(.semibold))
+            LazyVGrid(columns: columns, spacing: AppStyle.Spacing.small) {
+                ForEach(InvoiceDraftPayment.Method.allCases) { method in
+                    let isSelected = model.content.payment?.method == method
+                    Button {
+                        model.setPaymentMethod(method)
+                    } label: {
+                        VStack(spacing: 4) {
+                            Image(systemName: isSelected ? "checkmark.circle.fill" : method.symbol)
+                                .foregroundStyle(isSelected ? AppStyle.Colors.accent : AppStyle.Colors.secondaryText)
+                                .accessibilityHidden(true)
+                            Text(LocalizedStringKey(method.title))
+                                .multilineTextAlignment(.center)
+                        }
+                        .padding(AppStyle.Spacing.small)
+                        .frame(maxWidth: .infinity, minHeight: 52)
+                        .background(.background, in: .rect(cornerRadius: 8))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 8)
+                                .strokeBorder(isSelected ? AppStyle.Colors.accent : Color.secondary.opacity(0.3),
+                                              lineWidth: isSelected ? 2 : 1)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(isSelected ? .isSelected : [])
+                }
+            }
         }
     }
 

@@ -5,6 +5,10 @@ struct InvoiceDraftEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(NetworkConnection.self) private var connection
     @Environment(SynchronizationState.self) private var synchronization
+    @Environment(AuthenticationSession.self) private var session: AuthenticationSession?
+    @Environment(AppPreferences.self) private var preferences: AppPreferences?
+    @State private var preview = InvoicePreviewModel()
+    @State private var createdDetail: InvoiceDetailModel?
     @State var model: InvoiceDraftEditorModel
     @State private var confirmsDiscard = false
     @State private var customerSearch: InvoiceCustomerSearchModel?
@@ -25,7 +29,7 @@ struct InvoiceDraftEditorView: View {
                     ContentUnavailableView("auth.unavailable", systemImage: "lock")
                 }
             }
-            .navigationTitle("invoiceCreation.title")
+            .navigationTitle(model.creation == nil ? "invoiceCreation.title" : "invoiceCreation.confirmationTitle")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
@@ -66,6 +70,7 @@ struct InvoiceDraftEditorView: View {
             .task { await model.load() }
             .onChange(of: synchronization.lastFinishedAt) { Task {
                 await model.load()
+                await model.refreshCreation()
                 await model.refreshAttachmentStatuses()
             } }
             .task(id: model.step) {
@@ -97,8 +102,19 @@ struct InvoiceDraftEditorView: View {
             }
             .sheet(isPresented: $showsSignature) { InvoiceSenderSignatureView(model: model) }
             .onChange(of: model.didQueueCreation) {
-                if model.didQueueCreation { synchronization.requestUpload(); dismiss() }
+                if model.didQueueCreation {
+                    model.acknowledgeUploadRequest()
+                    synchronization.requestUpload()
+                }
             }
+            .task(id: model.createdInvoice?.id) {
+                createdDetail = model.makeCreatedInvoiceDetail()
+                if session?.canPrintInvoices == true, connection.status != .unavailable {
+                    await createdDetail?.preparePrinting()
+                }
+            }
+            .modifier(InvoicePreviewModifier(preview: preview))
+            .onChange(of: session?.contextID) { preview.cancel() }
             .onChange(of: model.didSave) { if model.didSave { dismiss() } }
         }
         .interactiveDismissDisabled(model.hasChanges || model.isSaving)
@@ -145,7 +161,7 @@ struct InvoiceDraftEditorView: View {
             case .details: invoiceDetails
             case .customers: customerDetails
             case .items: invoiceItems
-            case .payment: InvoicePaymentFields(model: model); paymentContext
+            case .payment: paymentSummary; InvoicePaymentFields(model: model); paymentContext
             case .review: reviewSummary; attachmentSection; policyReview; signatureReview
             }
             if !model.isLoaded && !model.isLoading {
@@ -313,6 +329,17 @@ struct InvoiceDraftEditorView: View {
         }
     }
 
+    private var paymentSummary: some View {
+        Section("invoiceCreation.step.review") {
+            LabeledContent("invoices.sender", value: model.content.senderName)
+            if let subtotal = model.amounts?.subtotal {
+                LabeledContent("invoiceCreation.subtotal") {
+                    Text(subtotal, format: .number.precision(.fractionLength(2))).monospacedDigit()
+                }
+            }
+        }
+    }
+
     private var reviewSummary: some View {
         Section("invoiceCreation.step.review") {
             LabeledContent("drafts.date", value: model.content.date.apiValue)
@@ -354,12 +381,35 @@ struct InvoiceDraftEditorView: View {
     private var creationStatus: some View {
         VStack(spacing: 20) {
             if let operation = model.creation {
-                Image(systemName: operation.state == .completed ? "checkmark.circle" : "clock.arrow.circlepath")
-                    .font(.largeTitle).foregroundStyle(.tint)
-                Text(LocalizedStringKey(operation.state.title)).font(.title2.bold())
-                if let number = model.createdInvoiceNumber { Text(number).font(.headline) }
-                Text(operation.state == .completed ? "invoiceCreation.confirmedHint" : "invoiceCreation.pendingHint")
-                    .foregroundStyle(.secondary).multilineTextAlignment(.center)
+                VStack(alignment: .leading, spacing: 12) {
+                    Label(LocalizedStringKey(operation.state.title),
+                          systemImage: operation.state == .completed ? "checkmark.circle.fill" : "clock.arrow.circlepath")
+                        .font(.title2.bold())
+                        .foregroundStyle(AppStyle.Colors.accent)
+                    Text(operation.state == .completed ? "invoiceCreation.confirmedHint" : "invoiceCreation.pendingHint")
+                        .foregroundStyle(.secondary)
+                    Divider()
+                    if let number = model.createdInvoiceNumber {
+                        LabeledContent("invoiceCreation.number", value: number)
+                    }
+                    LabeledContent("invoices.sender", value: operation.plan.content.senderName)
+                    if let subtotal = model.amounts?.subtotal, let totals = model.paymentTotals {
+                        LabeledContent("invoices.total") {
+                            Text(subtotal - totals.discount, format: .number.precision(.fractionLength(2)))
+                                .bold().monospacedDigit()
+                        }
+                    }
+                }
+                .padding(AppStyle.Spacing.medium)
+                .background(AppStyle.Colors.surface, in: .rect(cornerRadius: AppStyle.Layout.cornerRadius))
+
+                if operation.plan.requiresJournal, let totals = model.paymentTotals {
+                    LabeledContent(operation.state == .completed ? "invoices.payment" : "invoicePayment.plannedPayment") {
+                        Text(totals.payment, format: .number.precision(.fractionLength(2))).monospacedDigit()
+                    }
+                    .padding(AppStyle.Spacing.medium)
+                    .background(AppStyle.Colors.surface, in: .rect(cornerRadius: AppStyle.Layout.cornerRadius))
+                }
                 if let issue = model.issue { Text(LocalizedStringKey(issue)) }
                 if !model.attachmentStatuses.isEmpty {
                     Text("invoiceAttachments.title").font(.headline)
@@ -395,7 +445,25 @@ struct InvoiceDraftEditorView: View {
                 ? AnyLayout(VStackLayout(spacing: 12)) : AnyLayout(HStackLayout(spacing: 16))
             layout {
                 if model.creation != nil {
-                    Button("documents.close") { dismiss() }.frame(maxWidth: .infinity, minHeight: 44)
+                    VStack(spacing: 8) {
+                        if let createdDetail, let session, let preferences, session.canPrintInvoices {
+                            Button {
+                                let contextID = session.contextID
+                                let language = preferences.language.rawValue
+                                let printedBy = session.user?.email ?? session.user?.name ?? ""
+                                preview.generate(isAuthorized: { session.contextID == contextID && session.canPrintInvoices }) {
+                                    try await createdDetail.localPrintDocument(language: language, printedBy: printedBy)
+                                }
+                            } label: {
+                                Label("invoiceCreation.printInvoice", systemImage: "printer")
+                                    .frame(maxWidth: .infinity, minHeight: 44)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(preview.isGenerating)
+                        }
+                        Button("documents.close") { dismiss() }
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                    }
                 } else {
                     if model.step != .details {
                         Button { model.goBack() } label: {

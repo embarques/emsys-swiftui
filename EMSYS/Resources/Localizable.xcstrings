@@ -2349,6 +2349,38 @@
         }
       }
     },
+    "invoiceCreation.confirmationTitle": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invoice Confirmation"
+          }
+        },
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Confirmación de factura"
+          }
+        }
+      }
+    },
+    "invoiceCreation.printInvoice": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Print Invoice"
+          }
+        },
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Imprimir factura"
+          }
+        }
+      }
+    },
     "invoiceCreation.confirmedHint": {
       "extractionState": "manual",
       "localizations": {

@@ -36,7 +36,13 @@ final class InvoicePaymentLayoutTests: XCTestCase {
         scroll.setContentOffset(CGPoint(x: 0, y: min(280, max(0, scroll.contentSize.height - scroll.bounds.height))), animated: false)
         try await Task.sleep(for: .milliseconds(300))
         try capture(window, name: "methods")
+        model.setPaymentMode(.skip)
+        XCTAssertEqual(model.paymentTotals?.payment, 0)
+        model.setPaymentMode(.record)
+        XCTAssertEqual(model.paymentTotals?.payment, 100)
         model.setPaymentMethod(.check)
+        XCTAssertEqual(model.content.payment?.method, .check)
+        XCTAssertNil(model.content.payment?.bankAccount)
         model.content.payment?.bankAccount = .init(id: 1, name: "Banco de prueba", displayName: nil, type: "BANK")
         model.content.payment?.checkNumber = "000123"
         window.overrideUserInterfaceStyle = .dark

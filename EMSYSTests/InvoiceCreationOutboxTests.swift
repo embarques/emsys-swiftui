@@ -503,6 +503,33 @@ final class InvoiceCreationOutboxTests: XCTestCase {
         XCTAssertEqual(saved?.journalRequest, operation.journalRequest)
     }
 
+    func testConfirmationRefreshesFromQueuedToServerConfirmed() async throws {
+        let directory = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try await open(directory)
+        let editor = InvoiceDraftEditorModel(store: store, currentBranchID: { 1 },
+            financialPermission: { $0 == .createInvoice }, isAuthorized: { true })
+        editor.content = try makePlan().content
+        await editor.load()
+        editor.setSkipSignature(true)
+        await editor.queueCreation()
+        let operation = try XCTUnwrap(editor.creation)
+        XCTAssertNil(editor.makeCreatedInvoiceDetail())
+        editor.acknowledgeUploadRequest()
+        XCTAssertFalse(editor.didQueueCreation)
+        await editor.retryCreation()
+        XCTAssertTrue(editor.didQueueCreation)
+
+        let reservation = try XCTUnwrap(operation.plan.reservation)
+        let confirmed = try JSONDecoder().decode(Invoice.self,
+            from: JSONSerialization.data(withJSONObject: ["id": reservation.id, "number": reservation.number]))
+        try await store.completeInvoiceCreation(id: operation.id, invoice: confirmed)
+        await editor.refreshCreation()
+        XCTAssertEqual(editor.creation?.state, .completed)
+        XCTAssertEqual(editor.createdInvoice?.id, confirmed.id)
+        XCTAssertEqual(editor.createdInvoiceNumber, reservation.number)
+    }
+
     func testOldCachedCuadreDoesNotChooseAccountingPeriodForNewSubmission() throws {
         let original = try makePlan()
         var content = original.content
