@@ -54,7 +54,7 @@ struct InvoicePaymentFields: View {
                 LabeledContent("invoicePayment.discount", value: discount)
             }
             if let totals = model.paymentTotals {
-                LabeledContent("invoicePayment.plannedPayment") {
+                LabeledContent("invoices.payment") {
                     Text(totals.payment, format: .number.precision(.fractionLength(2))).monospacedDigit()
                 }
                 LabeledContent("invoicePayment.plannedBalance") {
