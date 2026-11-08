@@ -3930,6 +3930,57 @@
         }
       }
     },
+    "invoiceList.deleteLocalTitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete offline invoice?"
+          }
+        },
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Eliminar factura sin sincronizar?"
+          }
+        }
+      }
+    },
+    "invoiceList.deleteLocalMessage": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This removes the invoice and its pickup link from this device only."
+          }
+        },
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se eliminarán la factura y su vínculo con la recogida solo de este dispositivo."
+          }
+        }
+      }
+    },
+    "invoiceList.deleteLocalError": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not delete the offline invoice. It may be syncing or already recorded."
+          }
+        },
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo eliminar la factura. Puede estar sincronizándose o ya estar registrada."
+          }
+        }
+      }
+    },
     "invoiceList.downloaded": {
       "extractionState": "manual",
       "localizations": {

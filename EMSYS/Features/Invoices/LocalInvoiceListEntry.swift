@@ -10,6 +10,7 @@ nonisolated struct LocalInvoiceListEntry: Identifiable, Sendable {
     let container: String?
     let state: PendingInvoiceCreation.State
     let invoice: Invoice?
+    var canDelete = false
 
     func matches(_ query: InvoiceListQuery) -> Bool {
         let text = query.normalizedText

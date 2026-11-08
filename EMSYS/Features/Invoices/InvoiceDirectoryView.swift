@@ -7,6 +7,7 @@ struct InvoiceDirectoryView: View {
     let invoices: [Invoice]
     var localEntries: [LocalInvoiceListEntry] = []
     var openLocal: (LocalInvoiceListEntry) -> Void = { _ in }
+    var deleteLocal: ((LocalInvoiceListEntry) -> Void)? = nil
     let outstandingBalance: Decimal
     let isLoading: Bool
     let isDownloaded: Bool
@@ -30,8 +31,8 @@ struct InvoiceDirectoryView: View {
     }
 
     var body: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 0) {
+        List {
+            Group {
                 header.padding(.bottom, 20)
                 if isDownloaded {
                     Label("invoiceList.downloaded", systemImage: "internaldrive")
@@ -66,21 +67,37 @@ struct InvoiceDirectoryView: View {
                                 .background(.background, in: RoundedRectangle(cornerRadius: 12))
                             }
                             .buttonStyle(.plain)
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                if entry.canDelete, let deleteLocal {
+                                    Button("drafts.delete", systemImage: "trash", role: .destructive) {
+                                        deleteLocal(entry)
+                                    }
+                                }
+                            }
+                            .contextMenu {
+                                if entry.canDelete, let deleteLocal {
+                                    Button("drafts.delete", systemImage: "trash", role: .destructive) {
+                                        deleteLocal(entry)
+                                    }
+                                }
+                            }
                         }
                     }
                 }
                 ForEach(months, id: \.self) { month in
-                    Text(monthTitle(month)).font(.headline).foregroundStyle(.secondary)
-                        .padding(.top, 12).padding(.bottom, 10)
-                    LazyVStack(spacing: 0) {
-                        ForEach(directoryInvoices.filter { $0.monthKey == month }) { invoice in
-                            InvoiceListRow(invoice: invoice, open: { open(invoice) },
-                                printInvoice: printInvoice.map { action in { action(invoice) } })
-                            Divider().padding(.horizontal, 16)
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(monthTitle(month)).font(.headline).foregroundStyle(.secondary)
+                            .padding(.top, 12).padding(.bottom, 10)
+                        LazyVStack(spacing: 0) {
+                            ForEach(directoryInvoices.filter { $0.monthKey == month }) { invoice in
+                                InvoiceListRow(invoice: invoice, open: { open(invoice) },
+                                    printInvoice: printInvoice.map { action in { action(invoice) } })
+                                Divider().padding(.horizontal, 16)
+                            }
                         }
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.secondary.opacity(0.15)))
                     }
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
-                    .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.secondary.opacity(0.15)))
                 }
                 if invoices.isEmpty && localEntries.isEmpty {
                     if isLoading { ProgressView().frame(maxWidth: .infinity).padding(40) }
@@ -106,10 +123,16 @@ struct InvoiceDirectoryView: View {
                         .frame(maxWidth: .infinity).padding(20)
                 }
             }
-            .padding(16)
-            .frame(maxWidth: 820)
-            .frame(maxWidth: .infinity)
+            .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+            .listRowSeparator(.hidden)
+            .listRowBackground(Color.clear)
         }
+        .listStyle(.plain)
+        .environment(\.defaultMinListRowHeight, 0)
+        .contentMargins(.vertical, 16, for: .scrollContent)
+        .scrollContentBackground(.hidden)
+        .frame(maxWidth: 852)
+        .frame(maxWidth: .infinity)
         .background(AppStyle.Colors.surface)
         .background(.background)
         .refreshable { await refresh() }

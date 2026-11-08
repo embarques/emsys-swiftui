@@ -11,6 +11,8 @@ struct InvoiceListView: View {
     @State private var sheet: Sheet?
     @State private var preview = InvoicePreviewModel()
     @State private var selectedInvoiceID: String?
+    @State private var localInvoiceToDelete: LocalInvoiceListEntry?
+    @State private var showsLocalDeleteError = false
     @State private var creation: InvoiceDraftEditorModel?
 
     private enum Sheet: Identifiable {
@@ -37,6 +39,7 @@ struct InvoiceListView: View {
             if let model {
                 InvoiceDirectoryView(query: $query, invoices: model.invoices, localEntries: model.localEntries,
                     openLocal: { creation = draftListModel(model).editor(draftID: $0.draftID) },
+                    deleteLocal: synchronization.isRunning ? nil : { localInvoiceToDelete = $0 },
                     outstandingBalance: model.outstandingBalance, isLoading: model.isLoading,
                     isDownloaded: model.isShowingDownloaded, hasMore: model.hasMore, issue: model.issue,
                     showFilters: { sheet = .filters }, open: { selectedInvoiceID = $0.id },
@@ -87,6 +90,30 @@ struct InvoiceListView: View {
                     sheet = .pool(draftListModel(model).pool())
                 }
             }
+        }
+        .confirmationDialog("invoiceList.deleteLocalTitle", isPresented: Binding(
+            get: { localInvoiceToDelete != nil },
+            set: { if !$0 { localInvoiceToDelete = nil } }
+        ), titleVisibility: .visible, presenting: localInvoiceToDelete) { entry in
+            Button("drafts.delete", role: .destructive) {
+                let contextID = session.contextID
+                Task {
+                    guard let model, session.contextID == contextID, session.canViewInvoices else { return }
+                    do {
+                        try await synchronization.deleteLocalInvoice {
+                            try await model.deleteLocalInvoice(entry)
+                        }
+                    } catch {
+                        if session.contextID == contextID { showsLocalDeleteError = true }
+                    }
+                }
+            }
+            Button("invoiceEdits.cancel", role: .cancel) { }
+        } message: { _ in
+            Text("invoiceList.deleteLocalMessage")
+        }
+        .alert("invoiceList.deleteLocalError", isPresented: $showsLocalDeleteError) {
+            Button("documents.close", role: .cancel) { }
         }
         .modifier(InvoicePreviewModifier(preview: preview))
         .modifier(InvoiceCreationPresentation(editor: $creation, onDismiss: {

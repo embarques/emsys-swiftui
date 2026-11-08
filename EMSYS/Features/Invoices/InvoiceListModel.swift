@@ -39,6 +39,11 @@ final class InvoiceListModel {
         self.store = store
     }
 
+    func deleteLocalInvoice(_ entry: LocalInvoiceListEntry) async throws {
+        try await store.deleteOfflineInvoice(id: entry.id, draftID: entry.draftID)
+        localEntries.removeAll { $0.id == entry.id }
+    }
+
     /// The request belongs to the directory, not a transient navigation task.
     /// A new query cancels its predecessor; the API client retains session checks.
     @discardableResult

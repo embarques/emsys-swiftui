@@ -966,6 +966,23 @@ extension InvoiceStore {
         }
     }
 
+    func deleteOfflineInvoice(id: String, draftID: UUID) throws {
+        try database.write { database in
+            // Keep the reserved number consumed. A response lost during a previous
+            // sync may have already used it on the server.
+            try database.execute(sql: """
+                DELETE FROM invoiceCreations
+                WHERE id = ? AND draftID = ? AND state != 'completed'
+                  AND invoiceID IS NULL AND journalReceipt IS NULL
+                  AND NOT EXISTS (
+                    SELECT 1 FROM invoiceAttachments WHERE draftID = ? AND invoiceID IS NOT NULL
+                  )
+                """, arguments: [id, draftID.uuidString, draftID.uuidString])
+            guard database.changesCount == 1 else { throw StoreError.draftChanged }
+            try database.execute(sql: "DELETE FROM invoiceDrafts WHERE id = ?", arguments: [draftID.uuidString])
+        }
+    }
+
     /// Read the actual pickup association, never a customer-name match. Completed
     /// receipts also retain the link when a server response omits pickup fields.
     func pickupInvoiceLinks(pickupID: UInt32) throws -> [PickupInvoiceLink] {
@@ -1012,7 +1029,7 @@ extension InvoiceStore {
     func localInvoiceListEntries(includeRecentConfirmed: Bool) throws -> [LocalInvoiceListEntry] {
         try database.read { database in
             let rows = try Row.fetchAll(database, sql: """
-                SELECT c.id, c.draftID, c.state,
+                SELECT c.id, c.draftID, c.state, c.journalReceipt IS NULL AND c.invoiceID IS NULL AS canDelete,
                     json_extract(CAST(c.plan AS TEXT), '$.reservation.number') AS number,
                     json_extract(CAST(c.plan AS TEXT), '$.content.senderName') AS senderName,
                     json_extract(CAST(c.plan AS TEXT), '$.content.receiverName') AS receiverName,
@@ -1038,7 +1055,7 @@ extension InvoiceStore {
                 return LocalInvoiceListEntry(id: row["id"], draftID: draftID,
                     number: invoice?.number ?? row["number"], senderName: row["senderName"] ?? "",
                     receiverName: row["receiverName"] ?? "", date: row["date"] ?? "",
-                    container: row["container"], state: state, invoice: invoice)
+                    container: row["container"], state: state, invoice: invoice, canDelete: row["canDelete"])
             }
         }
     }

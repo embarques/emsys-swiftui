@@ -75,6 +75,10 @@ final class InvoiceCreationOutboxTests: XCTestCase {
         let reopenedOperation = try await reopened.invoiceCreation(draftID: operation.draftID)
         let saved = try XCTUnwrap(reopenedOperation)
         XCTAssertNotNil(saved.invoiceRequest)
+        do {
+            try await reopened.deleteOfflineInvoice(id: saved.id.uuidString, draftID: saved.draftID)
+            XCTFail("An invoice with a server payment receipt must be kept for sync")
+        } catch InvoiceStore.StoreError.draftChanged { }
         let request = try XCTUnwrap(JSONSerialization.jsonObject(with: XCTUnwrap(saved.invoiceRequest)) as? [String: Any])
         let invoice = try XCTUnwrap(request["invoice"] as? [String: Any])
         XCTAssertEqual(invoice["number"] as? String, "INV-TEST-1")
@@ -685,6 +689,35 @@ final class InvoiceCreationOutboxTests: XCTestCase {
         XCTAssertEqual(pickup["id"] as? Int, 42)
         content.pickup = InvoicePickupReference(id: 0)
         XCTAssertThrowsError(try InvoiceCreationPlan(content: content, branch: original.branch))
+    }
+
+    func testDeletingOfflineInvoiceUnlinksPickupAndKeepsReservedNumberConsumed() async throws {
+        let directory = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try await open(directory)
+        let original = try makePlan()
+        var content = original.content
+        content.pickup = InvoicePickupReference(id: 42)
+        let plan = try InvoiceCreationPlan(content: content, branch: original.branch)
+        let draftID = UUID()
+        let queued = try await store.queueInvoiceCreation(draftID: draftID, expectedRevision: nil, plan: plan)
+        try await store.setInvoiceCreationState(id: queued.id, state: .needsReview)
+        let links = try await store.pickupInvoiceLinks(pickupID: 42)
+        XCTAssertEqual(links.map(\.id), [queued.id.uuidString])
+        let entries = try await store.localInvoiceListEntries(includeRecentConfirmed: false)
+        XCTAssertEqual(entries.first?.canDelete, true)
+        let available = try await store.availableInvoiceReservationCount()
+
+        try await store.deleteOfflineInvoice(id: queued.id.uuidString, draftID: draftID)
+
+        let updatedLinks = try await store.pickupInvoiceLinks(pickupID: 42)
+        let updatedEntries = try await store.localInvoiceListEntries(includeRecentConfirmed: false)
+        let savedDraft = try await store.draft(id: draftID)
+        let remaining = try await store.availableInvoiceReservationCount()
+        XCTAssertTrue(updatedLinks.isEmpty)
+        XCTAssertTrue(updatedEntries.isEmpty)
+        XCTAssertNil(savedDraft)
+        XCTAssertEqual(remaining, available)
     }
 
     func testAssignedPaymentRetryUsesScopedRoutesAndLeavesOrdinaryOperationsUntouched() async throws {

@@ -10,6 +10,7 @@ final class SynchronizationState {
     private(set) var lastSucceededAt: Date?
     private(set) var lastFinishedAt: Date?
     private(set) var lastDownloadedAt: Date?
+    private(set) var localInvoiceDeletionVersion = 0
     private(set) var requestedUploadVersion = 0
     private(set) var completedUploadVersion = 0
     @ObservationIgnored private var generation = UUID()
@@ -23,6 +24,20 @@ final class SynchronizationState {
     func waitForCurrentRun() async {
         guard isRunning else { return }
         await withCheckedContinuation { waiters.append($0) }
+    }
+
+    func deleteLocalInvoice(using operation: () async throws -> Void) async throws {
+        guard !isRunning else { throw InvoiceStore.StoreError.draftChanged }
+        let currentGeneration = generation
+        isRunning = true
+        defer {
+            if generation == currentGeneration {
+                isRunning = false
+                resumeWaiters()
+            }
+        }
+        try await operation()
+        if generation == currentGeneration { localInvoiceDeletionVersion += 1 }
     }
 
     func useSession(_ sessionID: UUID) {

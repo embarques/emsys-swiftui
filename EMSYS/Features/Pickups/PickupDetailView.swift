@@ -38,6 +38,9 @@ struct PickupDetailView: View {
             Button("pickupSync.useServer", role: .destructive) { Task { await model.discardRejectedCompletion() } }
             Button("invoiceEdits.cancel", role: .cancel) { }
         }
+        .onChange(of: synchronization.localInvoiceDeletionVersion) {
+            Task { await linkedInvoices?.load() }
+        }
         .onChange(of: synchronization.lastFinishedAt) {
             Task { await model.refresh(online: false); await linkedInvoices?.load() }
         }
