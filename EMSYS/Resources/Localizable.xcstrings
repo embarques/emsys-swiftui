@@ -2450,6 +2450,125 @@
         }
       }
     },
+    "invoiceCreation.closeout.open": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open today's Cuadre"
+          }
+        },
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir el cuadre de hoy"
+          }
+        }
+      }
+    },
+    "invoiceCreation.closeout.ask": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Today's Cuadre must be open for the payment location. Ask an authorized user to check it, then retry sync."
+          }
+        },
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El cuadre de hoy debe estar abierto para el lugar del pago. Pide a un usuario autorizado que lo revise y vuelve a sincronizar."
+          }
+        }
+      }
+    },
+    "invoiceCreation.closeout.required": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open today's Cuadre for this branch to continue syncing the saved payment."
+          }
+        },
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abre el cuadre de hoy de esta sucursal para continuar la sincronización del pago guardado."
+          }
+        }
+      }
+    },
+    "invoiceCreation.closeout.currency": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Currency"
+          }
+        },
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Moneda"
+          }
+        }
+      }
+    },
+    "invoiceCreation.closeout.rate": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exchange rate"
+          }
+        },
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tasa de cambio"
+          }
+        }
+      }
+    },
+    "invoiceCreation.closeout.resume": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "After the server opens the Cuadre, EMSYS retries the saved payment."
+          }
+        },
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cuando el servidor abra el cuadre, EMSYS reintentará el pago guardado."
+          }
+        }
+      }
+    },
+    "invoiceCreation.closeout.failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not open today's Cuadre. Check your connection or permissions and try again."
+          }
+        },
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo abrir el cuadre de hoy. Revisa tu conexión o tus permisos y vuelve a intentarlo."
+          }
+        }
+      }
+    },
     "invoiceCreation.confirmedHint": {
       "extractionState": "manual",
       "localizations": {

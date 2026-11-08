@@ -12,6 +12,7 @@ struct InvoiceDraftEditorView: View {
     @State var model: InvoiceDraftEditorModel
     @State private var confirmsDiscard = false
     @State private var customerSearch: InvoiceCustomerSearchModel?
+    @State private var showsCloseoutSetup = false
     @State private var showsSignature = false
     @State private var importsAttachment = false
     @State private var catalogSelection: CatalogSelection?
@@ -27,6 +28,17 @@ struct InvoiceDraftEditorView: View {
                     if model.creation != nil { ScrollView { creationStatus } } else { editorForm }
                 } else {
                     ContentUnavailableView("auth.unavailable", systemImage: "lock")
+                }
+            }
+            .sheet(isPresented: $showsCloseoutSetup) {
+                if let session, let branch = closeoutBranch {
+                    let contextID = session.contextID
+                    InvoiceCloseoutSetupView(branch: branch) { currency, rate in
+                        try await model.openCloseout(branch: branch, currency: currency, rate: rate) {
+                            session.contextID == contextID && session.user?.branch?.id == branch.id
+                                && session.permissions?.contains("canCreateIncomeStatement", resourceType: "income_statement") == true
+                        }
+                    }
                 }
             }
             .navigationTitle(model.creation == nil ? "invoiceCreation.title" : "invoiceCreation.confirmationTitle")
@@ -380,6 +392,16 @@ struct InvoiceDraftEditorView: View {
         }
     }
 
+    private var closeoutBranch: AuthenticatedUser.Branch? {
+        guard let session, let branch = session.user?.branch, let operation = model.creation,
+              let code = branch.code, !code.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              session.permissions?.contains("canCreateIncomeStatement", resourceType: "income_statement") == true,
+              operation.plan.branch.id == branch.id,
+              operation.plan.content.pickupRoute == nil || operation.plan.content.pickupRoute?.branch?.id == branch.id
+        else { return nil }
+        return branch
+    }
+
     private var creationStatus: some View {
         VStack(spacing: 20) {
             if let operation = model.creation {
@@ -430,7 +452,12 @@ struct InvoiceDraftEditorView: View {
                 if let failure = operation.failure {
                     VStack(alignment: .leading, spacing: AppStyle.Spacing.small) {
                         Label(LocalizedStringKey(failure.stage.title), systemImage: "exclamationmark.circle")
-                        if let status = failure.status {
+                        if failure.requiresCloseout {
+                            Text(closeoutBranch == nil ? "invoiceCreation.closeout.ask" : "invoiceCreation.closeout.required")
+                                .font(.callout).foregroundStyle(.secondary)
+                        } else if let message = failure.message, !message.isEmpty {
+                            Text(verbatim: message).font(.callout).foregroundStyle(.secondary)
+                        } else if let status = failure.status {
                             Text("HTTP \(status.formatted(.number.grouping(.never)))")
                                 .font(.caption).foregroundStyle(.secondary)
                         } else {
@@ -474,23 +501,26 @@ struct InvoiceDraftEditorView: View {
                 if let operation = model.creation {
                     VStack(spacing: 8) {
                         if let session, let preferences, session.canPrintInvoices {
-                            if createdDetail == nil {
-                                Text("invoiceCreation.printAfterSync").font(.caption).foregroundStyle(.secondary)
-                            }
                             Button {
-                                guard let createdDetail else { return }
                                 let contextID = session.contextID
                                 let language = preferences.language.rawValue
                                 let printedBy = session.user?.email ?? session.user?.name ?? ""
                                 preview.generate(isAuthorized: { session.contextID == contextID && session.canPrintInvoices }) {
-                                    try await createdDetail.localPrintDocument(language: language, printedBy: printedBy)
+                                    if let createdDetail {
+                                        return try await createdDetail.localPrintDocument(language: language, printedBy: printedBy)
+                                    }
+                                    return try await model.printSavedCreation(language: language, printedBy: printedBy)
                                 }
                             } label: {
                                 Label("invoiceCreation.printInvoice", systemImage: "printer")
                                     .frame(maxWidth: .infinity, minHeight: 44)
                             }
                             .buttonStyle(.borderedProminent)
-                            .disabled(createdDetail == nil || preview.isGenerating)
+                            .disabled(preview.isGenerating)
+                        }
+                        if operation.failure?.requiresCloseout == true, closeoutBranch != nil {
+                            Button("invoiceCreation.closeout.open") { showsCloseoutSetup = true }
+                                .buttonStyle(.bordered)
                         }
                         if operation.state != .completed {
                             Button {
@@ -564,5 +594,90 @@ struct InvoiceDraftEditorView: View {
             if let issue = model.paymentLocationIssue { Text(LocalizedStringKey(issue)).foregroundStyle(.secondary) }
         }
         .disabled(!model.isLoaded || model.isSaving)
+    }
+}
+
+private struct InvoiceCloseoutSetupView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.locale) private var locale
+    let branch: AuthenticatedUser.Branch
+    let submit: (String, Double) async throws -> Void
+    @State private var currency = "USD"
+    @State private var rate = ""
+    @State private var isSubmitting = false
+    @State private var serverMessage: String?
+    @State private var failed = false
+
+    private var needsCurrency: Bool {
+        ["RD", "DR", "DO"].contains(branch.code?.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() ?? "")
+    }
+
+    private var exchangeRate: Double? {
+        if currency == "USD" { return 1 }
+        guard let value = try? Double(rate, format: .number.locale(locale)), value.isFinite, value > 0 else { return nil }
+        return value
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Text(branch.name ?? branch.code ?? "")
+                    if needsCurrency {
+                        Picker("invoiceCreation.closeout.currency", selection: $currency) {
+                            Text(verbatim: "USD").tag("USD")
+                            Text(verbatim: "DOP").tag("DOP")
+                        }
+                        if currency == "DOP" {
+                            TextField("invoiceCreation.closeout.rate", text: $rate)
+                            #if os(iOS)
+                                .keyboardType(.decimalPad)
+                            #endif
+                        }
+                    } else {
+                        LabeledContent("invoiceCreation.closeout.currency", value: "USD")
+                        LabeledContent("invoiceCreation.closeout.rate", value: "1")
+                    }
+                } footer: {
+                    Text("invoiceCreation.closeout.resume")
+                }
+                if let serverMessage {
+                    Text(verbatim: serverMessage).foregroundStyle(.red)
+                } else if failed {
+                    Text("invoiceCreation.closeout.failed").foregroundStyle(.red)
+                }
+                Button("invoiceCreation.closeout.open") {
+                    guard let exchangeRate else { return }
+                    isSubmitting = true
+                    serverMessage = nil
+                    failed = false
+                    Task {
+                        defer { isSubmitting = false }
+                        do {
+                            try await submit(currency, exchangeRate)
+                            dismiss()
+                        } catch let error as APIServerFailure {
+                            serverMessage = error.message
+                            failed = true
+                        } catch {
+                            failed = true
+                        }
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(exchangeRate == nil || isSubmitting)
+            }
+            .formStyle(.grouped)
+            .navigationTitle("invoiceCreation.closeout.open")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("invoiceEdits.cancel") { dismiss() }.disabled(isSubmitting)
+                }
+            }
+        }
+        .interactiveDismissDisabled(isSubmitting)
+        #if os(macOS)
+        .frame(minWidth: 440, minHeight: 340)
+        #endif
     }
 }

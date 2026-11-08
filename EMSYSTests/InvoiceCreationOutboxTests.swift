@@ -1,3 +1,4 @@
+import PDFKit
 import XCTest
 @testable import EMSYS
 
@@ -146,6 +147,45 @@ final class InvoiceCreationOutboxTests: XCTestCase {
         XCTAssertEqual(CreationProtocol.bodies[3], frozenInvoice)
         let completed = try await reopened.invoiceCreation(draftID: paid.draftID)
         XCTAssertEqual(completed?.state, .completed)
+    }
+
+    func testCloseoutConflictAllowsOfflinePrintAndRetriesExactPaymentAfterOpening() async throws {
+        let directory = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try await open(directory)
+        let plan = try makePlan(payment: "5")
+        let operation = try await store.queueInvoiceCreation(draftID: UUID(), expectedRevision: nil, plan: plan)
+        let conflict = Data(#"{"message":"CLOSEOUT_REQUIRED","data":{"code":"CLOSEOUT_REQUIRED"}}"#.utf8)
+        let (client, session) = try makeClient([.status(409, conflict)])
+        defer { session.invalidateAndCancel() }
+        do {
+            try await InvoiceCreationUploader(client: client, store: store).synchronize()
+            XCTFail("Payment requires a closeout")
+        } catch InvoiceCreationUploader.UploadError.attentionRequired { }
+        let reopened = try await open(directory)
+        let editor = InvoiceDraftEditorModel(draftID: operation.draftID, store: reopened, client: client,
+            financialPermission: { $0 == .createInvoice }, isAuthorized: { true })
+        await editor.load()
+        XCTAssertEqual(editor.creation?.failure?.requiresCloseout, true)
+
+        let document = try await editor.printSavedCreation(language: "en", printedBy: "Fixture")
+        let pdf = try XCTUnwrap(PDFDocument(data: document.pdf)?.string)
+        XCTAssertTrue(pdf.contains("Saved locally - pending sync"))
+        XCTAssertTrue(pdf.contains("Fixture box"))
+        XCTAssertEqual(CreationProtocol.paths, ["/v1/journals/sync"])
+
+        let openStatement = Data(#"{"success":true,"data":{"id":7,"status":"open","branch":{"id":1}}}"#.utf8)
+        CreationProtocol.responses = [.success(openStatement), .success(receiptResponse), .success(invoiceResponse)]
+        try await editor.openCloseout(branch: plan.branch, currency: "USD", rate: 1, isAllowed: { true })
+        XCTAssertTrue(editor.didQueueCreation)
+        try await InvoiceCreationUploader(client: client, store: reopened).synchronize()
+        XCTAssertEqual(CreationProtocol.paths, ["/v1/journals/sync", "/v1/income-statements",
+            "/v1/journals/sync", "/v1/invoices/sync/create"])
+        XCTAssertEqual(CreationProtocol.bodies[0], CreationProtocol.bodies[2])
+        let setup = try XCTUnwrap(JSONSerialization.jsonObject(with: CreationProtocol.bodies[1]) as? [String: Any])
+        XCTAssertEqual(Set(setup.keys), ["currency", "rate"])
+        XCTAssertEqual(setup["currency"] as? String, "USD")
+        XCTAssertEqual(setup["rate"] as? Double, 1)
     }
 
     func testMissingRouteKeepsWorkForExplicitRetryAndNeverFallsBack() async throws {
@@ -775,7 +815,7 @@ final class InvoiceCreationOutboxTests: XCTestCase {
 }
 
 private final class CreationProtocol: URLProtocol {
-    enum Response { case success(Data), status(Int), failure(URLError.Code) }
+    enum Response { case success(Data), status(Int, Data = Data()), failure(URLError.Code) }
     nonisolated(unsafe) static var responses: [Response] = []
     nonisolated(unsafe) static var paths: [String] = []
     nonisolated(unsafe) static var bodies: [Data] = []
@@ -803,7 +843,7 @@ private final class CreationProtocol: URLProtocol {
         let payload: Data
         switch response {
         case .success(let body): status = 201; payload = body
-        case .status(let code): status = code; payload = Data()
+        case .status(let code, let body): status = code; payload = body
         case .failure: return
         }
         guard let url = request.url, let http = HTTPURLResponse(url: url, statusCode: status, httpVersion: nil, headerFields: nil) else { return }

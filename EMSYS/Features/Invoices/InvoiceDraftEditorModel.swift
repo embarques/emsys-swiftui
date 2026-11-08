@@ -233,6 +233,45 @@ final class InvoiceDraftEditorModel: Identifiable {
         }
     }
 
+    func openCloseout(branch: AuthenticatedUser.Branch, currency: String, rate: Double,
+                      isAllowed: () -> Bool) async throws {
+        struct Setup: Encodable {
+            let currency: String
+            let rate: Double
+        }
+        guard isAvailable, isAllowed(), !isSaving, let client, let creation,
+              creation.failure?.requiresCloseout == true,
+              creation.plan.branch.id == branch.id,
+              creation.plan.content.pickupRoute == nil || creation.plan.content.pickupRoute?.branch?.id == branch.id,
+              ["USD", "DOP"].contains(currency), rate.isFinite, rate > 0 else {
+            throw APIClientError.invalidResponse
+        }
+        isSaving = true
+        let statement: InvoiceIncomeStatement
+        do {
+            let body = try JSONEncoder().encode(Setup(currency: currency, rate: rate))
+            statement = try await client.post("income-statements", encodedBody: body,
+                                              capturesServerFailure: true, as: InvoiceIncomeStatement.self)
+        } catch {
+            isSaving = false
+            throw error
+        }
+        isSaving = false
+        guard isAvailable, isAllowed(), !Task.isCancelled, statement.isOpen,
+              statement.branch?.id == branch.id else { throw APIClientError.invalidResponse }
+        await retryCreation()
+    }
+
+    func printSavedCreation(language: String, printedBy: String) async throws -> InvoiceDocument {
+        guard isAvailable, let operation = try await store.invoiceCreation(draftID: draftID) else {
+            throw InvoicePDFRenderer.RenderError.missingInvoice
+        }
+        if let id = operation.invoiceID {
+            return try await InvoiceLocalPrinting.generate(invoiceID: id, store: store, language: language, printedBy: printedBy)
+        }
+        return try await InvoiceLocalPrinting.generatePending(operation, store: store, language: language, printedBy: printedBy)
+    }
+
     func retryCreation() async {
         guard isAvailable, financialPermission(.createInvoice), let creation,
               creation.state != .completed, !isSaving else { return }

@@ -50,9 +50,10 @@ final class APIClient {
     func post<Value: Decodable>(
         _ path: String,
         encodedBody: Data,
+        capturesServerFailure: Bool = false,
         as type: Value.Type
     ) async throws -> Value {
-        try await request(path, queryItems: [], method: "POST", body: encodedBody, as: type)
+        try await request(path, queryItems: [], method: "POST", body: encodedBody, capturesServerFailure: capturesServerFailure, as: type)
     }
 
     /// Preserve the immutable payload of an existing-record outbox operation.
@@ -87,6 +88,7 @@ final class APIClient {
         body: Data?,
         contentType: String = "application/json",
         isUpload: Bool = false,
+        capturesServerFailure: Bool = false,
         as type: Value.Type
     ) async throws -> Value {
         // Only relative, unescaped resource paths are accepted. An arbitrary URL
@@ -130,6 +132,11 @@ final class APIClient {
             throw APIClientError.sessionChanged
         }
         guard (200..<300).contains(result.response.statusCode) else {
+            if capturesServerFailure {
+                let response = try? JSONDecoder().decode(APIServerFailure.Envelope.self, from: result.data)
+                throw APIServerFailure(status: result.response.statusCode, code: response?.data?.code,
+                                       message: response?.message)
+            }
             throw APIClientError.httpStatus(result.response.statusCode)
         }
         let envelope = try JSONDecoder().decode(APIResponse<Value>.self, from: result.data)

@@ -48,6 +48,49 @@ nonisolated enum InvoiceLocalPrinting {
         try await store.savePrintCompany(company)
     }
 
+    static func generatePending(_ operation: PendingInvoiceCreation, store: InvoiceStore,
+                                language: String, printedBy: String) async throws -> InvoiceDocument {
+        let company = try await store.printCompany() ?? InvoicePrintCompany(id: "", name: "EMSYS")
+        let document = try await Task.detached(priority: .userInitiated) {
+            let content = operation.plan.content
+            let amounts = try InvoiceDraftAmounts(items: content.items)
+            let discount = content.payment?.totals(subtotal: amounts.subtotal)?.discount ?? 0
+            let items = content.items.map {
+                Invoice.Item(id: $0.id.uuidString, name: $0.name, description: nil,
+                    quantity: Decimal(string: $0.quantity.trimmingCharacters(in: .whitespacesAndNewlines)),
+                    price: Decimal(string: $0.unitPrice.trimmingCharacters(in: .whitespacesAndNewlines)),
+                    total: amounts.lineTotals[$0.id].map { Decimal($0) })
+            }
+            func party(_ snapshot: InvoiceCustomerWriteSnapshot?, addressID: String?, name: String) throws -> Invoice.Party {
+                let party = try snapshot?.party(addressID: addressID)
+                let address = party?.address.map {
+                    Invoice.Address(address1: $0.address1, address2: $0.address2, city: $0.city, state: $0.state,
+                                    zipcode: $0.zipcode, isPrimary: $0.isPrimary, apartment: $0.apartment)
+                }
+                return Invoice.Party(name: party?.name ?? name, id: party?.id, phones: party?.phones.map {
+                    Invoice.Phone(number: $0.number, displayNumber: nil, isPrimary: $0.isPrimary)
+                }, address: address)
+            }
+            let id = operation.plan.reservation?.id ?? operation.id.uuidString
+            let number = operation.plan.reservation?.number
+            var invoice = Invoice(id: id, number: number, date: content.date.apiValue,
+                sender: try party(content.senderWriteSnapshot, addressID: content.senderAddressID, name: content.senderName),
+                receiver: try party(content.receiverWriteSnapshot, addressID: content.receiverAddressID, name: content.receiverName),
+                cost: Decimal(amounts.subtotal), payment: nil, balance: nil, invoiceDetails: items)
+            invoice.discount = Decimal(discount)
+            invoice.container = content.container.map { .init(name: $0.name, id: UInt16(exactly: $0.id), containerNumber: $0.containerNumber) }
+            invoice.paidStatus = "-"
+            let signature = content.confirmation?.skipSignature == true ? nil : content.senderSignature?.pngData
+            let pdf = try InvoicePDFRenderer(invoice: invoice, company: company, language: language,
+                printedBy: printedBy, senderSignaturePNG: signature, isPendingSync: true).render()
+            return InvoiceDocument(id: UUID(), reportID: "local-pending-invoice-" + UUID().uuidString,
+                selection: .init(invoiceID: id, includeSender: signature != nil, receiverSignatureID: nil),
+                savedAt: .now, pdf: pdf)
+        }.value
+        try Task.checkCancellation()
+        return document
+    }
+
     static func generate(invoiceID: String, store: InvoiceStore, language: String, printedBy: String) async throws -> InvoiceDocument {
         guard let invoice = try await store.invoice(id: invoiceID) else { throw InvoicePDFRenderer.RenderError.missingInvoice }
         guard let company = try await store.printCompany() else { throw InvoicePDFRenderer.RenderError.missingCompany }

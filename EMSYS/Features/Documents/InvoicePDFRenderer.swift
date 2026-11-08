@@ -9,12 +9,13 @@ nonisolated struct InvoicePDFRenderer {
     let language: String
     let printedBy: String
     var senderSignaturePNG: Data? = nil
+    var isPendingSync = false
     var now: Date = .now
     var timezone: TimeZone = .current
     private let widths: [Double] = [15, 140, 20, 20]
 
     func render() throws -> Data {
-        guard let number = invoice.number, !number.isEmpty, invoice.invoiceDetails != nil else { throw RenderError.missingInvoice }
+        guard (isPendingSync || invoice.number?.isEmpty == false), invoice.invoiceDetails != nil else { throw RenderError.missingInvoice }
         guard !company.name.isEmpty else { throw RenderError.missingCompany }
         guard (invoice.invoiceDetails?.count ?? 0) <= 10_000 else { throw RenderError.oversizedContent }
         var canvas = InvoicePDFCanvas()
@@ -76,8 +77,13 @@ nonisolated struct InvoicePDFRenderer {
         let hasLogo = company.logoImage != nil
         if hasLogo { canvas.image(x: 10, y: 10, width: 76, height: 22) }
         canvas.cell(company.name, x: hasLogo ? 88 : 10, y: 13, width: 74, height: 7, font: .bold, size: 16)
-        canvas.cell("No. " + (invoice.number ?? ""), x: 153.9, y: 13, width: 52, height: 7, font: .bold, size: 16, align: "R")
+        canvas.cell("No. " + (invoice.number ?? "-"), x: 153.9, y: 13, width: 52, height: 7, font: .bold, size: 16, align: "R")
         var y = hasLogo ? 38.0 : 24.0
+        if isPendingSync {
+            let notice = language == "en" ? "Saved locally - pending sync" : "Guardada localmente - pendiente de sincronizar"
+            canvas.cell(notice, x: 10, y: y, width: 195, height: 6, font: .bold, size: 11)
+            y += 8
+        }
         let date = invoice.calendarDate.map { format($0, pattern: "MM/dd/yyyy", zone: .gmt) } ?? "-"
         let received = receivedBy
         for (label, value) in [("Fecha", date), ("Furgon", invoice.container?.name ?? "-"), received] {
@@ -113,7 +119,7 @@ nonisolated struct InvoicePDFRenderer {
         tableHeader(&canvas, ["Pendiente", "Costo", "Descuento", "Recargo", "Pago", "Balance"], widths: summaryWidths, y: y)
         y += 7
         let status = invoice.paidStatus.flatMap { $0.isEmpty ? nil : $0 } ?? ((invoice.balance ?? 0) <= 0 ? "PAGADA" : (invoice.payment ?? 0) > 0 ? "PARCIAL" : "PENDIENTE")
-        let values = [status, money(invoice.cost), money(invoice.discount), money(invoice.surcharge), money(invoice.payment), money(invoice.balance)]
+        let values = [status, money(invoice.cost), money(invoice.discount), money(invoice.surcharge), isPendingSync ? "-" : money(invoice.payment), isPendingSync ? "-" : money(invoice.balance)]
         var x = 10.0
         for index in summaryWidths.indices {
             canvas.line(x, y, x, y + 6)

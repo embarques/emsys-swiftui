@@ -12,6 +12,10 @@ nonisolated struct PendingInvoiceCreation: Identifiable, Sendable {
         }
         let stage: Stage
         let status: Int?
+        var code: String? = nil
+        var message: String? = nil
+
+        var requiresCloseout: Bool { stage == .payment && status == 409 && code == "CLOSEOUT_REQUIRED" }
     }
 
     let id: UUID
