@@ -67,13 +67,16 @@ struct InvoiceDirectoryView: View {
                                 .background(.background, in: RoundedRectangle(cornerRadius: 12))
                             }
                             .buttonStyle(.plain)
-                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            #if os(iOS)
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                 if entry.canDelete, let deleteLocal {
-                                    Button("drafts.delete", systemImage: "trash", role: .destructive) {
+                                    Button("drafts.delete", systemImage: "trash") {
                                         deleteLocal(entry)
                                     }
+                                    .tint(.red)
                                 }
                             }
+                            #endif
                             .contextMenu {
                                 if entry.canDelete, let deleteLocal {
                                     Button("drafts.delete", systemImage: "trash", role: .destructive) {
