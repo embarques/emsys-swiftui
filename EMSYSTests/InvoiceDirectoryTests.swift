@@ -9,6 +9,36 @@ import UIKit
 
 @MainActor
 final class InvoiceDirectoryTests: XCTestCase {
+    #if os(iOS)
+    func testSplitSelectionKeepsDetailWhenReturningToTheDirectory() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try await InvoiceStore.open(directory: directory, userID: "user", companyID: "company")
+        let client = try APIClient(baseURL: XCTUnwrap(URL(string: "https://api.example.test/v1"))) { _ in
+            throw URLError(.notConnectedToInternet)
+        }
+        let list = InvoiceListModel(client: client, store: store)
+        let first = try fixture(1)
+        let second = try fixture(2)
+        var selection = InvoiceSplitSelection()
+
+        XCTAssertNil(selection.detail)
+        XCTAssertEqual(selection.compactColumn, .sidebar)
+        selection.open(first, in: list)
+        let originalDetail = try XCTUnwrap(selection.detail)
+        XCTAssertEqual(selection.compactColumn, .detail)
+
+        selection.compactColumn = .sidebar
+        selection.open(first, in: list)
+        XCTAssertTrue(selection.detail === originalDetail)
+        XCTAssertEqual(selection.compactColumn, .detail)
+
+        selection.open(second, in: list)
+        XCTAssertEqual(selection.detail?.invoice.id, second.id)
+        XCTAssertFalse(selection.detail === originalDetail)
+    }
+    #endif
+
     func testSearchPayloadUsesNumericBalanceAndCombinesPartySearchWithFilters() throws {
         var query = InvoiceListQuery()
         query.text = "  TEST CLIENT  "

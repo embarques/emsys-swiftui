@@ -6,6 +6,9 @@ struct InvoiceDirectoryView: View {
     @Binding var query: InvoiceListQuery
     let invoices: [Invoice]
     var localEntries: [LocalInvoiceListEntry] = []
+    var usesSidebarRows = false
+    var showsSidebarHeading = true
+    var selectedInvoiceID: String? = nil
     var openLocal: (LocalInvoiceListEntry) -> Void = { _ in }
     var deleteLocal: ((LocalInvoiceListEntry) -> Void)? = nil
     let outstandingBalance: Decimal
@@ -33,7 +36,7 @@ struct InvoiceDirectoryView: View {
     var body: some View {
         List {
             Group {
-                header.padding(.bottom, 20)
+                header.padding(.bottom, usesSidebarRows ? 12 : 20)
                 if isDownloaded {
                     Label("invoiceList.downloaded", systemImage: "internaldrive")
                         .font(.caption).foregroundStyle(.secondary).padding(.bottom, 12)
@@ -52,8 +55,7 @@ struct InvoiceDirectoryView: View {
                         .padding(.vertical, 10)
                     ForEach(localEntries) { entry in
                         if let invoice = entry.invoice {
-                            InvoiceListRow(invoice: invoice, open: { open(invoice) },
-                                printInvoice: printInvoice.map { action in { action(invoice) } })
+                            invoiceRow(invoice)
                         } else {
                             Button { openLocal(entry) } label: {
                                 VStack(alignment: .leading, spacing: 5) {
@@ -93,8 +95,7 @@ struct InvoiceDirectoryView: View {
                             .padding(.top, 12).padding(.bottom, 10)
                         LazyVStack(spacing: 0) {
                             ForEach(directoryInvoices.filter { $0.monthKey == month }) { invoice in
-                                InvoiceListRow(invoice: invoice, open: { open(invoice) },
-                                    printInvoice: printInvoice.map { action in { action(invoice) } })
+                                invoiceRow(invoice)
                                 Divider().padding(.horizontal, 16)
                             }
                         }
@@ -141,8 +142,19 @@ struct InvoiceDirectoryView: View {
         .refreshable { await refresh() }
     }
 
+    private func invoiceRow(_ invoice: Invoice) -> some View {
+        InvoiceListRow(invoice: invoice, open: { open(invoice) },
+            printInvoice: printInvoice.map { action in { action(invoice) } },
+            usesSidebarRows: usesSidebarRows, isSelected: selectedInvoiceID == invoice.id)
+    }
+
     private var header: some View {
-        VStack(spacing: 16) {
+        VStack(alignment: .leading, spacing: usesSidebarRows ? 10 : 16) {
+            if usesSidebarRows && showsSidebarHeading {
+                Text("navigation.invoices")
+                    .font(.title2.bold())
+                    .accessibilityAddTraits(.isHeader)
+            }
             HStack(spacing: 10) {
                 HStack {
                     Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
@@ -154,7 +166,8 @@ struct InvoiceDirectoryView: View {
                             .accessibilityLabel("invoiceList.clearSearch")
                     }
                 }
-                .padding(14).background(.background, in: RoundedRectangle(cornerRadius: 14))
+                .padding(usesSidebarRows ? 10 : 14).frame(minHeight: 44)
+                .background(.background, in: RoundedRectangle(cornerRadius: 14))
                 .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(.secondary.opacity(0.2)))
                 Button(action: showFilters) {
                     Image(systemName: query.hasAdditionalFilters ? "line.3.horizontal.decrease.circle.fill" : "slider.horizontal.3")
@@ -163,6 +176,41 @@ struct InvoiceDirectoryView: View {
                 .background(.background, in: RoundedRectangle(cornerRadius: 14))
                 .accessibilityLabel("invoiceList.filters")
             }
+            if usesSidebarRows {
+                sidebarSummary
+            } else {
+                fullSummary
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var sidebarSummary: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("invoiceList.outstanding")
+                .font(.caption).foregroundStyle(.secondary)
+            Text(outstandingBalance, format: .currency(code: "USD"))
+                .font(.headline.monospacedDigit())
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            Text("invoiceList.downloadedTotal")
+                .font(.caption2).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(.background, in: .rect(cornerRadius: 12))
+        .accessibilityElement(children: .combine)
+
+        Picker("invoiceList.filters", selection: $query.scope) {
+            ForEach(InvoiceListQuery.Scope.allCases) { scope in
+                Text(LocalizedStringKey(scope.title)).tag(scope)
+            }
+        }
+        .pickerStyle(.menu)
+    }
+
+    private var fullSummary: some View {
+        VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 8) {
                 Text("invoiceList.outstanding").font(.subheadline.weight(.medium))
                 HStack(alignment: .firstTextBaseline) {
@@ -170,6 +218,7 @@ struct InvoiceDirectoryView: View {
                     Spacer(minLength: 8)
                     Text(outstandingBalance, format: .currency(code: "USD"))
                         .font(.title2.weight(.bold)).monospacedDigit()
+                        .lineLimit(1).minimumScaleFactor(0.75)
                 }
             }
             .padding(18).frame(maxWidth: .infinity, alignment: .leading)

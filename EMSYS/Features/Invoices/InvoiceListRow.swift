@@ -5,6 +5,8 @@ struct InvoiceListRow: View {
     let invoice: Invoice
     let open: () -> Void
     let printInvoice: (() -> Void)?
+    var usesSidebarRows = false
+    var isSelected = false
     @State private var expanded = false
 
     private var status: String {
@@ -14,6 +16,78 @@ struct InvoiceListRow: View {
     }
 
     var body: some View {
+        if usesSidebarRows {
+            sidebarRow
+        } else {
+            expandableRow
+        }
+    }
+
+    private var sidebarRow: some View {
+        Button(action: open) {
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(invoice.number ?? invoice.id)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.tint)
+                    Spacer(minLength: 6)
+                    if let date = invoice.calendarDate {
+                        Text(date.formatted(Date.FormatStyle(date: .abbreviated, time: .omitted, locale: locale, timeZone: .gmt)))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Text(invoice.sender?.name ?? invoice.receiver?.name ?? "—")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        sidebarStatus
+                        Spacer(minLength: 0)
+                        sidebarBalance
+                    }
+                    VStack(alignment: .leading, spacing: 4) {
+                        sidebarStatus
+                        sidebarBalance
+                    }
+                }
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background {
+                Rectangle().fill(isSelected ? Color.accentColor.opacity(0.14) : Color.clear)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .background(.background)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .contextMenu {
+            if let printInvoice {
+                Button(action: printInvoice) { Label("documents.print", systemImage: "printer") }
+            }
+        }
+    }
+
+    private var sidebarStatus: some View {
+        Text(LocalizedStringKey(status))
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: true, vertical: false)
+    }
+
+    @ViewBuilder
+    private var sidebarBalance: some View {
+        if let balance = invoice.balance ?? (invoice.paidStatus == "CLOSED" ? Decimal.zero : nil) {
+            Text(balance, format: .currency(code: "USD"))
+                .font(.caption.weight(.semibold).monospacedDigit())
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+        }
+    }
+
+    private var expandableRow: some View {
         VStack(alignment: .leading, spacing: 12) {
             Button { withAnimation { expanded.toggle() } } label: {
                 VStack(spacing: 12) {

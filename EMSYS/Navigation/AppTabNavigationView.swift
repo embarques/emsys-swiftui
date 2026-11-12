@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Each tab owns its navigation stack and keeps it while another tab is selected.
+/// Each tab keeps its own navigation while another tab is selected.
 struct AppTabNavigationView<Destination: View>: View {
     @Binding var selection: AppDestination
     @ViewBuilder var content: (AppDestination) -> Destination
@@ -22,7 +22,7 @@ struct AppTabNavigationView<Destination: View>: View {
         TabView(selection: $selection) {
             ForEach(AppDestination.primaryTabs) { destination in
                 Tab(value: destination) {
-                    NavigationStack { content(destination) }
+                    content(destination)
                 } label: {
                     Label(destination.title, systemImage: destination.systemImageName)
                 }
