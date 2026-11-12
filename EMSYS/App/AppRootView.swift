@@ -118,8 +118,14 @@ struct AppRootView: View {
         AppTabNavigationView(selection: Binding(
             get: { selectedDestination ?? .invoices }, set: { selectedDestination = $0 }
         )) { destination in
-            destinationContent(destination)
-                .safeAreaInset(edge: .top, spacing: 0) { ConnectionStatusView() }
+            if destination == .invoices, session.canViewInvoices {
+                InvoiceListView()
+            } else {
+                NavigationStack {
+                    destinationContent(destination)
+                        .safeAreaInset(edge: .top, spacing: 0) { ConnectionStatusView() }
+                }
+            }
         }
         #else
         NavigationSplitView(columnVisibility: $columnVisibility, preferredCompactColumn: $compactColumn) {

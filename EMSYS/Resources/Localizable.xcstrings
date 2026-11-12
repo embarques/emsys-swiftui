@@ -4864,6 +4864,22 @@
         }
       }
     },
+    "invoices.selectInvoice": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select an invoice"
+          }
+        },
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selecciona una factura"
+          }
+        }
+      }
+    },
     "invoices.empty": {
       "extractionState": "manual",
       "localizations": {

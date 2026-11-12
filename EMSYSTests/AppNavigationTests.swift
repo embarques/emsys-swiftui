@@ -85,7 +85,9 @@ private struct NavigationFixture: View {
     @Bindable var probe: NavigationProbe
     var body: some View {
         AppTabNavigationView(selection: $probe.selection) { destination in
-            NavigationFixtureSection(destination: destination, probe: probe)
+            NavigationStack {
+                NavigationFixtureSection(destination: destination, probe: probe)
+            }
         }
         .onChange(of: probe.selection) { probe.didSelect?(probe.selection) }
     }
