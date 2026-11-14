@@ -157,7 +157,7 @@ final class InvoicePoolTests: XCTestCase {
         let bytes = try await store.invoicePoolActionPayload(id: action.id)
         let body = try XCTUnwrap(JSONSerialization.jsonObject(with: bytes) as? [String: Any])
         XCTAssertEqual(body["action"] as? String, "generate-self")
-        XCTAssertEqual(body["count"] as? Int, 50)
+        XCTAssertEqual(body["count"] as? Int, 20)
         XCTAssertNil(body["employeeId"])
     }
 

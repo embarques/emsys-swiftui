@@ -8,7 +8,7 @@ The Invoices directory and draft list show a warning when locally usable numbers
 reach the server's low threshold (default 10). New creation is disabled at zero.
 The Reserved invoices sheet downloads unclaimed user assignments exclusively
 for this installation. Users with canGenerateOwnInvoicePool on invoice_pool_self
-can generate 50 numbers for themselves while connected; otherwise an administrator
+can generate 20 numbers for themselves while connected; otherwise an administrator
 must assign a pool in the portal. The backend generates all numbers.
 
 SQLite is scoped to user, company and API environment. It durably stores an

@@ -126,13 +126,13 @@
         "es-DO": {
           "stringUnit": {
             "state": "translated",
-            "value": "Generar 50 números para mí"
+            "value": "Generar 20 números para mí"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Generate 50 numbers for me"
+            "value": "Generate 20 numbers for me"
           }
         }
       }

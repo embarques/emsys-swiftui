@@ -63,7 +63,7 @@ nonisolated struct InvoicePoolAction: Codable, Sendable, Identifiable {
     init(action: Kind, deviceID: UUID, items: [InvoiceReservation] = []) {
         requestId = UUID().uuidString.lowercased()
         self.action = action
-        count = action == .generate ? 50 : action == .claim ? 100 : nil
+        count = action == .generate ? 20 : action == .claim ? 100 : nil
         deviceId = action == .generate ? nil : deviceID.uuidString.lowercased()
         self.items = action == .return ? items.map(\.proof) : nil
     }
