@@ -1,5 +1,9 @@
 import PDFKit
 import XCTest
+#if os(iOS)
+import SwiftUI
+import UIKit
+#endif
 @testable import EMSYS
 
 @MainActor
@@ -36,6 +40,137 @@ final class InvoiceCreationOutboxTests: XCTestCase {
         let other = try await InvoiceStore.open(directory: directory, userID: "other", companyID: "company")
         let otherWork = try await other.pendingInvoiceCreations()
         XCTAssertTrue(otherWork.isEmpty)
+    }
+
+    func testDuplicateInitialPaymentCanReplaceOnceUntilAnotherDuplicate() async throws {
+        let directory = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try await open(directory)
+        let draftID = UUID()
+        let original = try await store.queueInvoiceCreation(draftID: draftID, expectedRevision: nil, plan: makePlan(payment: "5"))
+        let conflict = CreationProtocol.Response.status(409, Data(#"{"success":false,"message":"Invoice already exists"}"#.utf8))
+        let (client, session) = try makeClient([conflict, conflict])
+        defer { session.invalidateAndCancel() }
+        let uploader = InvoiceCreationUploader(client: client, store: store)
+        do {
+            try await uploader.synchronize()
+            XCTFail("Duplicate should require review")
+        } catch InvoiceCreationUploader.UploadError.attentionRequired { }
+
+        let model = InvoiceDraftEditorModel(draftID: draftID, store: store,
+            financialPermission: { _ in true }, isAuthorized: { true })
+        await model.load()
+        XCTAssertTrue(model.canReplaceInvoiceNumber)
+        await model.replaceDuplicateInvoiceNumber()
+        let replacement = try XCTUnwrap(model.creation)
+        XCTAssertEqual(replacement.state, .replacementReady)
+        XCTAssertFalse(model.canReplaceInvoiceNumber)
+        XCTAssertFalse(model.didQueueCreation)
+        XCTAssertEqual(model.createdInvoiceNumber, replacement.plan.reservation?.number)
+        XCTAssertNotEqual(replacement.plan.reservation?.number, original.plan.reservation?.number)
+        XCTAssertNotEqual(replacement.id, original.id)
+        XCTAssertNotEqual(replacement.plan.journalRequestID, original.plan.journalRequestID)
+        XCTAssertEqual(replacement.plan.content, original.plan.content)
+
+        await model.replaceDuplicateInvoiceNumber()
+        XCTAssertEqual(model.creation?.id, replacement.id)
+        let pending = try await store.pendingInvoiceCreations()
+        XCTAssertTrue(pending.isEmpty, "Background sync must wait for an explicit retry")
+
+        let reopened = try await open(directory)
+        let saved = try await reopened.invoiceCreation(draftID: draftID)
+        XCTAssertEqual(saved?.state, .replacementReady)
+        XCTAssertEqual(saved?.journalRequest, replacement.journalRequest)
+        await model.retryCreation()
+        XCTAssertTrue(model.didQueueCreation)
+        XCTAssertFalse(model.canReplaceInvoiceNumber)
+        do {
+            try await uploader.synchronize()
+            XCTFail("Second duplicate should require review")
+        } catch InvoiceCreationUploader.UploadError.attentionRequired { }
+        await model.refreshCreation()
+        XCTAssertTrue(model.canReplaceInvoiceNumber)
+        await model.replaceDuplicateInvoiceNumber()
+        XCTAssertNotEqual(model.creation?.plan.reservation?.number, replacement.plan.reservation?.number)
+        XCTAssertFalse(model.canReplaceInvoiceNumber)
+        XCTAssertEqual(CreationProtocol.bodies, [original.journalRequest, replacement.journalRequest].compactMap { $0 })
+    }
+
+    #if os(iOS)
+    func testDuplicateInvoiceRecoveryRendersInConfirmation() async throws {
+        let directory = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try await open(directory)
+        let draftID = UUID()
+        let operation = try await store.queueInvoiceCreation(draftID: draftID, expectedRevision: nil,
+                                                              plan: makePlan(payment: "5"))
+        try await store.setInvoiceCreationState(id: operation.id, state: .needsReview,
+            failure: .init(stage: .payment, status: 409, message: "Invoice already exists"))
+
+        let model = InvoiceDraftEditorModel(draftID: draftID, store: store,
+            financialPermission: { _ in true }, isAuthorized: { true })
+        await model.load()
+        let host = UIHostingController(rootView: InvoiceDraftEditorView(model: model)
+            .environment(NetworkConnection())
+            .environment(SynchronizationState())
+            .environment(\.locale, Locale(identifier: "es-DO")))
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let previous = scene.windows.first(where: \.isKeyWindow)
+        let window = UIWindow(windowScene: scene)
+        window.frame = scene.effectiveGeometry.coordinateSpace.bounds
+        window.overrideUserInterfaceStyle = .dark
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true; previous?.makeKey() }
+
+        XCTAssertTrue(model.canReplaceInvoiceNumber)
+        try await captureReplacementConfirmation(window, name: "duplicate")
+        await model.replaceDuplicateInvoiceNumber()
+        XCTAssertFalse(model.canReplaceInvoiceNumber)
+        try await captureReplacementConfirmation(window, name: "replacement")
+    }
+
+    private func captureReplacementConfirmation(_ window: UIWindow, name: String) async throws {
+        try await Task.sleep(for: .milliseconds(400))
+        window.layoutIfNeeded()
+        let scroll = try XCTUnwrap(confirmationScrollView(in: window))
+        scroll.setContentOffset(CGPoint(x: 0, y: max(0, scroll.contentSize.height - scroll.bounds.height
+            + scroll.adjustedContentInset.bottom)), animated: false)
+        try await Task.sleep(for: .milliseconds(200))
+        let image = UIGraphicsImageRenderer(bounds: window.bounds).image { _ in
+            window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
+        }
+        let device = UIDevice.current.userInterfaceIdiom == .pad ? "ipad" : "iphone"
+        try XCTUnwrap(image.pngData()).write(to: FileManager.default.temporaryDirectory
+            .appending(path: "emsys-invoice-\(name)-\(device).png"))
+    }
+
+    private func confirmationScrollView(in view: UIView) -> UIScrollView? {
+        if let scroll = view as? UIScrollView { return scroll }
+        return view.subviews.lazy.compactMap { self.confirmationScrollView(in: $0) }.first
+    }
+    #endif
+
+    func testDuplicateAfterConfirmedPaymentCannotReplaceNumber() async throws {
+        let directory = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try await open(directory)
+        let original = try await store.queueInvoiceCreation(draftID: UUID(), expectedRevision: nil, plan: makePlan(payment: "5"))
+        let conflict = CreationProtocol.Response.status(409, Data(#"{"success":false,"message":"Invoice already exists"}"#.utf8))
+        let (client, session) = try makeClient([.success(receiptResponse), conflict])
+        defer { session.invalidateAndCancel() }
+        do {
+            try await InvoiceCreationUploader(client: client, store: store).synchronize()
+            XCTFail("Duplicate should require review")
+        } catch InvoiceCreationUploader.UploadError.attentionRequired { }
+        let saved = try await store.invoiceCreation(draftID: original.draftID)
+        XCTAssertNotNil(saved?.paymentReceipt)
+        XCTAssertEqual(saved?.failure?.isDuplicateInvoiceNumber, true)
+        XCTAssertEqual(saved?.canReplaceInvoiceNumber, false)
+        do {
+            _ = try await store.replaceDuplicateInvoiceNumber(creationID: original.id)
+            XCTFail("A confirmed payment must keep its invoice number")
+        } catch InvoiceStore.StoreError.draftChanged { }
     }
 
     func testLostInvoiceResponseRetriesTheExactBodyWithoutPostingPayment() async throws {

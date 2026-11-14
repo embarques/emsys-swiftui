@@ -1,6 +1,125 @@
 {
   "sourceLanguage": "es-DO",
   "strings": {
+    "invoicePayment.chooseMethod": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seleccionar método"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select method"
+          }
+        }
+      }
+    },
+    "drafts.itemOptions": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Más opciones"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "More options"
+          }
+        }
+      }
+    },
+    "invoiceCreation.status.replacementReady": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nuevo número reservado"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New number reserved"
+          }
+        }
+      }
+    },
+    "invoiceCreation.replacementPoolEmpty": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No quedan números disponibles. Descarga más números reservados e inténtalo de nuevo."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No numbers are available. Download more reserved numbers and try again."
+          }
+        }
+      }
+    },
+    "invoiceCreation.replacementHint": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reintenta la sincronización para usar el número nuevo."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retry synchronization to use the new number."
+          }
+        }
+      }
+    },
+    "invoiceCreation.replaceNumber": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cambiar número de factura"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Replace invoice number"
+          }
+        }
+      }
+    },
+    "sync.warning": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aviso de sincronización"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sync warning"
+          }
+        }
+      }
+    },
     "sync.reviewRequired": {
       "extractionState": "manual",
       "localizations": {

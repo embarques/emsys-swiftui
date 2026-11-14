@@ -2,7 +2,7 @@ import Foundation
 
 nonisolated struct PendingInvoiceCreation: Identifiable, Sendable {
     enum State: String, Codable, Sendable {
-        case pending, needsReview, authorizationRequired, serverUnavailable, completed
+        case pending, needsReview, replacementReady, authorizationRequired, serverUnavailable, completed
         var title: String { "invoiceCreation.status.\(rawValue)" }
     }
     struct Failure: Codable, Sendable {
@@ -14,6 +14,8 @@ nonisolated struct PendingInvoiceCreation: Identifiable, Sendable {
         let status: Int?
         var code: String? = nil
         var message: String? = nil
+
+        var isDuplicateInvoiceNumber: Bool { status == 409 && message == "Invoice already exists" }
 
         var requiresCloseout: Bool { stage == .payment && status == 409 && code == "CLOSEOUT_REQUIRED" }
     }
@@ -27,4 +29,10 @@ nonisolated struct PendingInvoiceCreation: Identifiable, Sendable {
     let invoiceID: String?
     var failure: Failure? = nil
     var paymentReceipt: InvoiceInitialPaymentReceipt? = nil
+
+    var canReplaceInvoiceNumber: Bool {
+        state == .needsReview && failure?.isDuplicateInvoiceNumber == true
+            && invoiceID == nil && paymentReceipt == nil
+            && (!plan.requiresJournal || (failure?.stage == .payment && invoiceRequest == nil))
+    }
 }

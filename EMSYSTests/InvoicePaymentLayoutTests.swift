@@ -27,6 +27,14 @@ final class InvoicePaymentLayoutTests: XCTestCase {
         window.makeKeyAndVisible()
         defer { window.isHidden = true; previous?.makeKey() }
         try await Task.sleep(for: .milliseconds(600))
+        if UIDevice.current.userInterfaceIdiom == .phone {
+            let amount = try XCTUnwrap(focusedTextField(in: host.view))
+            XCTAssertEqual(amount.keyboardType, .decimalPad)
+            amount.insertText("100")
+            XCTAssertEqual(model.paymentTotals?.balance, 285)
+            try capture(window, name: "keypad")
+            window.endEditing(true)
+        }
         try capture(window, name: "selection")
         XCTAssertEqual(model.content.payment?.method, .cash)
         XCTAssertEqual(model.content.paymentRegion, "NY")
@@ -65,6 +73,11 @@ final class InvoicePaymentLayoutTests: XCTestCase {
         let device = UIDevice.current.userInterfaceIdiom == .pad ? "ipad" : "iphone"
         try XCTUnwrap(image.pngData()).write(to: FileManager.default.temporaryDirectory
             .appending(path: "emsys-payment-\(name)-\(device).png"))
+    }
+
+    private func focusedTextField(in view: UIView) -> UITextField? {
+        if view.isFirstResponder, let field = view as? UITextField { return field }
+        return view.subviews.lazy.compactMap { self.focusedTextField(in: $0) }.first
     }
 
     private func findScrollView(in view: UIView) -> UIScrollView? {

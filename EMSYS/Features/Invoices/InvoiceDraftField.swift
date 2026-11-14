@@ -8,6 +8,7 @@ struct InvoiceDraftField: View {
     @Binding var text: String
     var input: Input = .text
     var selection: Binding<TextSelection?>?
+    var emphasizesValue = false
 
     @ViewBuilder
     private var editor: some View {
@@ -24,7 +25,9 @@ struct InvoiceDraftField: View {
             Text(title).font(.subheadline).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             editor
-                .font(.body.weight(.medium))
+                .font(emphasizesValue ? .title2.weight(.semibold).monospacedDigit() : .body.weight(.medium))
+                .multilineTextAlignment(emphasizesValue ? .trailing : .leading)
+                .frame(minHeight: emphasizesValue ? 44 : nil)
                 .textFieldStyle(.plain)
                 .accessibilityLabel(Text(title))
                 #if os(iOS)
@@ -33,5 +36,11 @@ struct InvoiceDraftField: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, 6)
+        .padding(.horizontal, emphasizesValue ? AppStyle.Spacing.small : 0)
+        .background {
+            if emphasizesValue {
+                RoundedRectangle(cornerRadius: 8).strokeBorder(.quaternary)
+            }
+        }
     }
 }

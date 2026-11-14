@@ -929,9 +929,7 @@ extension InvoiceStore {
             guard frozen.count <= 3 * 1024 * 1024 else { throw StoreError.invalidDraft }
             let journal = try plan.journalRequest()
             let invoice = journal == nil ? try plan.invoiceRequest() : nil
-            try database.execute(sql: "UPDATE invoiceReservations SET state = 'consumed' WHERE id = ? AND token = ? AND state = 'available'", arguments: [reservation.id, reservation.allocation.token])
-            guard database.changesCount == 1 else { throw StoreError.invoiceReservationChanged }
-            try database.execute(sql: "UPDATE invoicePoolMetadata SET revision = revision + 1 WHERE id = 1")
+            try Self.consumeInvoiceReservation(reservation, in: database)
             guard try Row.fetchOne(database, sql: "SELECT id FROM invoiceCreations WHERE draftID = ?", arguments: [draftID.uuidString]) == nil else {
                 throw StoreError.draftChanged
             }
@@ -966,6 +964,48 @@ extension InvoiceStore {
         }
     }
 
+    func replaceDuplicateInvoiceNumber(creationID: UUID) throws -> PendingInvoiceCreation {
+        try database.write { database in
+            guard let row = try Row.fetchOne(database, sql: "SELECT * FROM invoiceCreations WHERE id = ?",
+                                            arguments: [creationID.uuidString]) else { throw StoreError.draftChanged }
+            let operation = try Self.decodeInvoiceCreation(row)
+            guard operation.canReplaceInvoiceNumber else { throw StoreError.draftChanged }
+            guard let payload = try Data.fetchOne(database, sql: """
+                SELECT r.payload FROM invoiceReservations r
+                WHERE r.state = 'available'
+                  AND json_extract(CAST(r.payload AS TEXT), '$.number') != ?
+                  AND NOT EXISTS (
+                    SELECT 1 FROM invoiceSnapshots s
+                    WHERE s.id = r.id OR s.number = json_extract(CAST(r.payload AS TEXT), '$.number')
+                  )
+                ORDER BY r.id LIMIT 1
+                """, arguments: [operation.plan.reservation?.number ?? ""]) else { throw StoreError.invoicePoolEmpty }
+            let reservation = try JSONDecoder().decode(InvoiceReservation.self, from: payload)
+            let plan = try InvoiceCreationPlan(content: operation.plan.content, branch: operation.plan.branch,
+                                               reservation: reservation)
+            let frozen = try JSONEncoder().encode(plan)
+            let journal = try plan.journalRequest()
+            let invoice = journal == nil ? try plan.invoiceRequest() : nil
+            try Self.consumeInvoiceReservation(reservation, in: database)
+            try database.execute(sql: """
+                UPDATE invoiceCreations
+                SET id = ?, state = 'replacementReady', plan = ?, failure = NULL,
+                    journalRequest = ?, journalHash = ?, invoiceRequest = ?, invoiceHash = ?
+                WHERE id = ?
+                """, arguments: [plan.invoiceRequestID.uuidString, frozen, journal,
+                    journal.map { Data(SHA256.hash(data: $0)) }, invoice,
+                    invoice.map { Data(SHA256.hash(data: $0)) }, creationID.uuidString])
+            return PendingInvoiceCreation(id: plan.invoiceRequestID, draftID: operation.draftID, state: .replacementReady,
+                                          plan: plan, journalRequest: journal, invoiceRequest: invoice, invoiceID: nil)
+        }
+    }
+
+    private nonisolated static func consumeInvoiceReservation(_ reservation: InvoiceReservation, in database: Database) throws {
+        try database.execute(sql: "UPDATE invoiceReservations SET state = 'consumed' WHERE id = ? AND token = ? AND state = 'available'", arguments: [reservation.id, reservation.allocation.token])
+        guard database.changesCount == 1 else { throw StoreError.invoiceReservationChanged }
+        try database.execute(sql: "UPDATE invoicePoolMetadata SET revision = revision + 1 WHERE id = 1")
+    }
+
     func deleteOfflineInvoice(id: String, draftID: UUID) throws {
         try database.write { database in
             // Keep the reserved number consumed. A response lost during a previous
@@ -983,35 +1023,46 @@ extension InvoiceStore {
         }
     }
 
-    /// Read the actual pickup association, never a customer-name match. Completed
-    /// receipts also retain the link when a server response omits pickup fields.
     func pickupInvoiceLinks(pickupID: UInt32) throws -> [PickupInvoiceLink] {
-        try database.read { database in
+        try pickupInvoiceLinks(pickupIDs: [pickupID])[pickupID] ?? []
+    }
+
+    /// Match the stored pickup ID, including when an invoice receipt omits it.
+    func pickupInvoiceLinks(pickupIDs: [UInt32]) throws -> [UInt32: [PickupInvoiceLink]] {
+        guard !pickupIDs.isEmpty else { return [:] }
+        let ids = String(decoding: try JSONEncoder().encode(pickupIDs), as: UTF8.self)
+        return try database.read { database in
             let rows = try Row.fetchAll(database, sql: """
-                SELECT id, number FROM invoiceSnapshots
-                WHERE json_extract(CAST(payload AS TEXT), '$.pickup.id') = ?
+                SELECT id, number, json_extract(CAST(payload AS TEXT), '$.pickup.id') AS pickupID
+                FROM invoiceSnapshots
+                WHERE pickupID IN (SELECT value FROM json_each(?))
                 ORDER BY number COLLATE NOCASE, id
-                """, arguments: [pickupID])
-            var links = rows.map { row in
+                """, arguments: [ids])
+            var links: [UInt32: [PickupInvoiceLink]] = [:]
+            var invoiceIDs: [UInt32: Set<String>] = [:]
+            for row in rows {
+                let pickupID: UInt32 = row["pickupID"]
                 let id: String = row["id"]
-                return PickupInvoiceLink(id: id, invoiceID: id, number: row["number"], state: nil)
+                links[pickupID, default: []].append(.init(id: id, invoiceID: id, number: row["number"], state: nil))
+                invoiceIDs[pickupID, default: []].insert(id)
             }
-            var invoiceIDs = Set(links.compactMap(\.invoiceID))
+
             let creations = try Row.fetchAll(database, sql: """
-                SELECT * FROM invoiceCreations
-                WHERE json_extract(CAST(plan AS TEXT), '$.content.pickup.id') = ?
-                ORDER BY createdAt, id
-                """, arguments: [pickupID])
+                SELECT c.*, s.number AS confirmedNumber,
+                       json_extract(CAST(c.plan AS TEXT), '$.content.pickup.id') AS pickupID
+                FROM invoiceCreations c LEFT JOIN invoiceSnapshots s ON c.invoiceID = s.id
+                WHERE pickupID IN (SELECT value FROM json_each(?))
+                ORDER BY c.createdAt, c.id
+                """, arguments: [ids])
             for row in creations {
+                let pickupID: UInt32 = row["pickupID"]
                 let creation = try Self.decodeInvoiceCreation(row)
-                if let invoiceID = creation.invoiceID {
-                    guard invoiceIDs.insert(invoiceID).inserted else { continue }
-                    let number = try String.fetchOne(database,
-                        sql: "SELECT number FROM invoiceSnapshots WHERE id = ?", arguments: [invoiceID])
-                    links.append(PickupInvoiceLink(id: invoiceID, invoiceID: invoiceID,
-                        number: number, state: creation.state))
+                if let id = creation.invoiceID {
+                    guard invoiceIDs[pickupID, default: []].insert(id).inserted else { continue }
+                    links[pickupID, default: []].append(.init(id: id, invoiceID: id,
+                        number: row["confirmedNumber"], state: creation.state))
                 } else {
-                    links.append(PickupInvoiceLink(id: creation.id.uuidString, invoiceID: nil,
+                    links[pickupID, default: []].append(.init(id: creation.id.uuidString, invoiceID: nil,
                         number: creation.plan.reservation?.number, state: creation.state))
                 }
             }

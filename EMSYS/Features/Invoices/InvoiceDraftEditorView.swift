@@ -21,6 +21,19 @@ struct InvoiceDraftEditorView: View {
 
     private struct CatalogSelection: Identifiable { let id: UUID }
 
+    private var usesMobileEntryLayout: Bool {
+        #if os(iOS)
+        UIDevice.current.userInterfaceIdiom == .phone && (model.step == .items || model.step == .payment)
+        #else
+        false
+        #endif
+    }
+
+    private var editorTitle: LocalizedStringKey {
+        if model.creation != nil { return "invoiceCreation.confirmationTitle" }
+        return usesMobileEntryLayout ? LocalizedStringKey(model.step.title) : "invoiceCreation.title"
+    }
+
     var body: some View {
         NavigationStack {
             Group {
@@ -46,15 +59,15 @@ struct InvoiceDraftEditorView: View {
                     }
                 }
             }
-            .navigationTitle(model.creation == nil ? "invoiceCreation.title" : "invoiceCreation.confirmationTitle")
+            .navigationTitle(editorTitle)
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .safeAreaInset(edge: .bottom, spacing: 0) { wizardFooter }
+            .connectionStatus()
             .safeAreaInset(edge: .top, spacing: 0) {
                 VStack(spacing: 0) {
-                    ConnectionStatusView()
-                    if model.creation == nil {
+                    if model.creation == nil, !usesMobileEntryLayout {
                         InvoicePoolCountView(count: model.availableReservations, threshold: model.poolThreshold)
                             .font(.caption).padding(.horizontal).padding(.vertical, 8)
                         if model.availableReservations == 0 {
@@ -144,25 +157,9 @@ struct InvoiceDraftEditorView: View {
 
     private var editorForm: some View {
         Form {
-            Section {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Label(LocalizedStringKey(model.step.title), systemImage: model.step.symbol)
-                            .font(.title2.bold())
-                        Spacer()
-                        Text("\(model.step.rawValue + 1) / \(InvoiceCreationStep.allCases.count)")
-                            .font(.subheadline.monospacedDigit()).foregroundStyle(.secondary)
-                    }
-                    ProgressView(value: Double(model.step.rawValue + 1), total: Double(InvoiceCreationStep.allCases.count))
-                        .accessibilityLabel(Text(LocalizedStringKey(model.step.title)))
-                    if model.step == .details {
-                        Text("drafts.localHint").font(.caption).foregroundStyle(.secondary)
-                    }
-                    if let pickup = model.content.pickup {
-                        LabeledContent("pickups.invoiceAssociation", value: "#\(pickup.id)").font(.subheadline)
-                    }
-                }
-                .padding(.vertical, 8)
+            if !usesMobileEntryLayout { wizardStepHeader }
+            else if let pickup = model.content.pickup {
+                LabeledContent("pickups.invoiceAssociation", value: "#\(pickup.id)").font(.footnote)
             }
             if model.isLoading || model.isSaving { ProgressView() }
             if let issue = model.issue {
@@ -180,7 +177,10 @@ struct InvoiceDraftEditorView: View {
             case .details: invoiceDetails
             case .customers: customerDetails
             case .items: invoiceItems
-            case .payment: paymentSummary; InvoicePaymentFields(model: model); paymentContext
+            case .payment:
+                if !usesMobileEntryLayout { paymentSummary }
+                InvoicePaymentFields(model: model, usesMobileLayout: usesMobileEntryLayout)
+                paymentContext
             case .review: reviewSummary; attachmentSection; policyReview; signatureReview
             }
             if !model.isLoaded && !model.isLoading {
@@ -191,6 +191,29 @@ struct InvoiceDraftEditorView: View {
         .frame(maxWidth: 840)
         .frame(maxWidth: .infinity)
         .disabled(!model.isLoaded || model.isSaving)
+    }
+
+    private var wizardStepHeader: some View {
+        Section {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Label(LocalizedStringKey(model.step.title), systemImage: model.step.symbol)
+                        .font(.title2.bold())
+                    Spacer()
+                    Text("\(model.step.rawValue + 1) / \(InvoiceCreationStep.allCases.count)")
+                        .font(.subheadline.monospacedDigit()).foregroundStyle(.secondary)
+                }
+                ProgressView(value: Double(model.step.rawValue + 1), total: Double(InvoiceCreationStep.allCases.count))
+                    .accessibilityLabel(Text(LocalizedStringKey(model.step.title)))
+                if model.step == .details {
+                    Text("drafts.localHint").font(.caption).foregroundStyle(.secondary)
+                }
+                if let pickup = model.content.pickup {
+                    LabeledContent("pickups.invoiceAssociation", value: "#\(pickup.id)").font(.subheadline)
+                }
+            }
+            .padding(.vertical, 8)
+        }
     }
 
     private var attachmentSection: some View {
@@ -271,7 +294,7 @@ struct InvoiceDraftEditorView: View {
                 InvoiceDraftItemFields(item: $item, priceFocusRequest: $priceFocusRequest,
                     canChooseCatalogItems: model.canChooseCatalogItems,
                     choose: { catalogSelection = CatalogSelection(id: itemID) },
-                    remove: { model.removeItem(id: itemID) })
+                    remove: { model.removeItem(id: itemID) }, usesMobileLayout: usesMobileEntryLayout)
                     .disabled(!model.isLoaded || model.isSaving)
             }
             Section {
@@ -282,7 +305,7 @@ struct InvoiceDraftEditorView: View {
                 .buttonStyle(.bordered)
                 .disabled(!model.isLoaded || model.isSaving)
             }
-            if let amounts = model.amounts {
+            if !usesMobileEntryLayout, let amounts = model.amounts {
                 Section {
                     LabeledContent("invoiceCreation.subtotal") {
                         Text(amounts.subtotal, format: .number.precision(.fractionLength(2)))
@@ -440,9 +463,11 @@ struct InvoiceDraftEditorView: View {
                 Text(LocalizedStringKey(operation.state.title))
                     .font(.title2.bold())
                     .accessibilityAddTraits(.isHeader)
-                Text(completed ? "invoiceCreation.confirmedHint" : "invoiceCreation.pendingHint")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                if operation.state != .replacementReady {
+                    Text(completed ? "invoiceCreation.confirmedHint" : "invoiceCreation.pendingHint")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
                 Divider().padding(.vertical, 4)
                 VStack(alignment: .leading, spacing: 8) {
                     if let number = model.createdInvoiceNumber {
@@ -548,8 +573,14 @@ struct InvoiceDraftEditorView: View {
                 if let failure = operation.failure {
                     confirmationCard {
                         VStack(alignment: .leading, spacing: AppStyle.Spacing.small) {
-                            Label(LocalizedStringKey(failure.stage.title), systemImage: "exclamationmark.circle")
-                                .font(.headline).foregroundStyle(.orange)
+                            HStack(alignment: .firstTextBaseline) {
+                                Label(LocalizedStringKey(failure.stage.title), systemImage: "exclamationmark.circle")
+                                    .font(.headline).foregroundStyle(.orange)
+                                if operation.canReplaceInvoiceNumber {
+                                    Spacer()
+                                    replaceInvoiceNumberButton
+                                }
+                            }
                             if failure.requiresCloseout {
                                 Text(closeoutBranch == nil ? "invoiceCreation.closeout.ask" : "invoiceCreation.closeout.required")
                                     .font(.callout).foregroundStyle(.secondary)
@@ -561,6 +592,17 @@ struct InvoiceDraftEditorView: View {
                             } else {
                                 Text("invoiceCreation.failure.receipt").font(.caption).foregroundStyle(.secondary)
                             }
+                        }
+                    }
+                }
+                if operation.state == .replacementReady {
+                    confirmationCard {
+                        HStack {
+                            Text("invoiceCreation.replacementHint")
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            replaceInvoiceNumberButton
                         }
                     }
                 }
@@ -590,9 +632,23 @@ struct InvoiceDraftEditorView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    private var replaceInvoiceNumberButton: some View {
+        Button {
+            Task { await model.replaceDuplicateInvoiceNumber() }
+        } label: {
+            Label("invoiceCreation.replaceNumber", systemImage: "arrow.3.trianglepath")
+                .labelStyle(.iconOnly)
+                .frame(minWidth: 44, minHeight: 44)
+        }
+        .disabled(!model.canReplaceInvoiceNumber || synchronization.isRunning)
+    }
+
     private var wizardFooter: some View {
-        VStack(spacing: 12) {
-            let layout = dynamicTypeSize.isAccessibilitySize
+        VStack(spacing: usesMobileEntryLayout ? 6 : 12) {
+            if model.creation == nil, usesMobileEntryLayout {
+                mobileEntryTotal
+            }
+            let layout = dynamicTypeSize.isAccessibilitySize && !usesMobileEntryLayout
                 ? AnyLayout(VStackLayout(spacing: 12)) : AnyLayout(HStackLayout(spacing: 16))
             layout {
                 if let operation = model.creation {
@@ -627,6 +683,7 @@ struct InvoiceDraftEditorView: View {
                                     .frame(maxWidth: .infinity, minHeight: 44)
                             }
                             .buttonStyle(.bordered)
+                            .disabled(model.isSaving || synchronization.isRunning)
                         }
                         Button("documents.close") { dismiss() }
                             .frame(maxWidth: .infinity, minHeight: 44)
@@ -634,8 +691,12 @@ struct InvoiceDraftEditorView: View {
                 } else {
                     if model.step != .details {
                         Button { model.goBack() } label: {
-                            Label("invoiceCreation.back", systemImage: "chevron.left")
-                                .frame(minHeight: 44)
+                            if usesMobileEntryLayout {
+                                Label("invoiceCreation.back", systemImage: "chevron.left")
+                                    .labelStyle(.iconOnly).frame(minWidth: 24, minHeight: 44)
+                            } else {
+                                Label("invoiceCreation.back", systemImage: "chevron.left").frame(minHeight: 44)
+                            }
                         }
                         .buttonStyle(.bordered)
                     }
@@ -657,9 +718,25 @@ struct InvoiceDraftEditorView: View {
             }
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 12)
+        .padding(.vertical, usesMobileEntryLayout ? 8 : 12)
         .background(.bar)
         .disabled(!model.isAvailable || !model.isLoaded || model.isSaving || model.isLoadingPolicies)
+    }
+
+    @ViewBuilder
+    private var mobileEntryTotal: some View {
+        if model.step == .payment, let totals = model.paymentTotals {
+            entryTotal("invoicePayment.plannedBalance", amount: totals.balance)
+        } else if model.step == .items, let amounts = model.amounts {
+            entryTotal("invoiceCreation.subtotal", amount: amounts.subtotal)
+        }
+    }
+
+    private func entryTotal(_ title: LocalizedStringKey, amount: Double) -> some View {
+        LabeledContent(title) {
+            Text(amount, format: .number.precision(.fractionLength(2)))
+                .font(.headline).monospacedDigit()
+        }
     }
 
     private var paymentContext: some View {

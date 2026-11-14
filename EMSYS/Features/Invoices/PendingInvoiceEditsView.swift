@@ -42,7 +42,7 @@ struct PendingInvoiceEditsView: View {
                 }
             }
             .navigationTitle("invoiceEdits.pendingTitle")
-            .safeAreaInset(edge: .top, spacing: 0) { ConnectionStatusView() }
+            .connectionStatus()
             .toolbar {
                 Button("sync.now") { synchronization.requestUpload() }
                     .disabled(synchronization.isRunning || connection.status == .unavailable || !model.isAvailable)

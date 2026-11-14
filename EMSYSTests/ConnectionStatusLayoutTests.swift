@@ -6,24 +6,26 @@ import XCTest
 
 @MainActor
 final class ConnectionStatusLayoutTests: XCTestCase {
-    func testInvoiceWarningsRenderOverScrolledRowsWithoutCoveringToolbar() async throws {
+    func testSyncWarningToolbarRendersAboveScrolledInvoiceRows() async throws {
         let state = SynchronizationState()
         await state.synchronize { throw InvoiceMutationUploader.UploadError.attentionRequired }
         let content = AppTabNavigationView(selection: .constant(.invoices)) { _ in
-            List(1...40, id: \.self) { index in
-                Text("Factura de prueba \(index)")
-                    .listRowBackground(Color.blue)
+            NavigationStack {
+                List(1...40, id: \.self) { index in
+                    Text("Factura de prueba \(index)")
+                        .listRowBackground(Color.blue)
+                }
+                    .navigationTitle("Facturas")
+                    .toolbar {
+                        Button {} label: { Label("Crear factura", systemImage: "plus") }
+                        Button {} label: { Label("Actualizar facturas", systemImage: "arrow.clockwise") }
+                        Button {} label: { Label("Acciones de facturas", systemImage: "ellipsis.circle") }
+                    }
+                    .safeAreaInset(edge: .top, spacing: 0) {
+                        InvoicePoolWarningView(issue: nil, count: 5, threshold: 10, openPool: {})
+                    }
+                    .connectionStatus()
             }
-                .navigationTitle("Facturas")
-                .toolbar {
-                    Button {} label: { Label("Crear factura", systemImage: "plus") }
-                    Button {} label: { Label("Actualizar facturas", systemImage: "arrow.clockwise") }
-                    Button {} label: { Label("Acciones de facturas", systemImage: "ellipsis.circle") }
-                }
-                .safeAreaInset(edge: .top, spacing: 0) {
-                    InvoicePoolWarningView(issue: nil, count: 5, threshold: 10, openPool: {})
-                }
-                .safeAreaInset(edge: .top, spacing: 0) { ConnectionStatusView() }
         }
         .environment(NetworkConnection())
         .environment(state)

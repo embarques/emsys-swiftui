@@ -48,6 +48,9 @@ final class PickupInvoicesTests: XCTestCase {
         let reopened = try await InvoiceStore.open(directory: directory, userID: "user", companyID: "company")
         let restored = try await reopened.pickupInvoiceLinks(pickupID: 42)
         XCTAssertEqual(restored.map(\.number), ["NY-123"])
+        let batch = try await reopened.pickupInvoiceLinks(pickupIDs: [42, 43])
+        XCTAssertEqual(batch[42]?.compactMap(\.number), ["NY-123"])
+        XCTAssertNil(batch[43])
         let unrelated = try await reopened.pickupInvoiceLinks(pickupID: 43)
         XCTAssertTrue(unrelated.isEmpty)
         let otherCompany = try await InvoiceStore.open(directory: directory, userID: "user", companyID: "other")
@@ -66,9 +69,10 @@ final class PickupInvoicesTests: XCTestCase {
         try await store.saveDownloaded([invoice,
             fixture(id: "000000000000000000000004", number: "NY-124", pickupID: 42),
             fixture(id: "000000000000000000000005", number: "NY-125", pickupID: 43)])
-        let links = try await store.pickupInvoiceLinks(pickupID: 42)
-        XCTAssertEqual(links.count, 2)
-        XCTAssertEqual(Set(links.compactMap(\.number)), ["NY-123", "NY-124"])
+        let links = try await store.pickupInvoiceLinks(pickupIDs: [42, 43, 44])
+        XCTAssertEqual(links[42]?.compactMap(\.number), ["NY-123", "NY-124"])
+        XCTAssertEqual(links[43]?.compactMap(\.number), ["NY-125"])
+        XCTAssertNil(links[44])
     }
 
     private func plan(pickupID: UInt32) throws -> InvoiceCreationPlan {

@@ -114,6 +114,32 @@ final class InvoicePoolTests: XCTestCase {
         catch InvoiceStore.StoreError.invoiceReservationChanged { }
     }
 
+    func testDuplicateReplacementSkipsKnownTakenNumbersAndKeepsOriginalWhenPoolIsEmpty() async throws {
+        let (store, _) = try await fixture()
+        let first = try await seed(store)
+        let taken = InvoiceReservation(id: "000000000000000000000004", number: "INV-TEST-2", allocation: first.allocation)
+        try await store.reconcileInvoiceReservations([first, taken], lowThreshold: 10)
+        let duplicate = try await store.queueInvoiceCreation(draftID: UUID(), expectedRevision: nil, plan: plan())
+        try await store.setInvoiceCreationState(id: duplicate.id, state: .needsReview,
+            failure: .init(stage: .invoice, status: 409, message: "Invoice already exists"))
+        let existing = try JSONDecoder().decode(Invoice.self, from: Data(#"{"id":"000000000000000000000090","number":"INV-TEST-2"}"#.utf8))
+        try await store.saveDownloaded([existing])
+
+        do {
+            _ = try await store.replaceDuplicateInvoiceNumber(creationID: duplicate.id)
+            XCTFail("A downloaded invoice already uses the remaining number")
+        } catch InvoiceStore.StoreError.invoicePoolEmpty { }
+        let saved = try await store.invoiceCreation(draftID: duplicate.draftID)
+        XCTAssertEqual(saved?.id, duplicate.id)
+        XCTAssertEqual(saved?.invoiceRequest, duplicate.invoiceRequest)
+
+        let available = InvoiceReservation(id: "000000000000000000000005", number: "INV-TEST-3", allocation: first.allocation)
+        try await store.reconcileInvoiceReservations([first, taken, available], lowThreshold: 10)
+        let replacement = try await store.replaceDuplicateInvoiceNumber(creationID: duplicate.id)
+        XCTAssertEqual(replacement.plan.reservation?.number, available.number)
+        XCTAssertNotEqual(replacement.invoiceRequest, duplicate.invoiceRequest)
+    }
+
     func testReceiptCannotReplaceTheReservedIdentity() async throws {
         let (store, _) = try await fixture()
         _ = try await seed(store)

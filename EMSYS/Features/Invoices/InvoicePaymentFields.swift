@@ -4,7 +4,9 @@ struct InvoicePaymentFields: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.locale) private var locale
     @Environment(NetworkConnection.self) private var connection
+    @FocusState private var isAmountFocused: Bool
     @Bindable var model: InvoiceDraftEditorModel
+    var usesMobileLayout = false
 
     var body: some View {
         Section {
@@ -25,10 +27,14 @@ struct InvoicePaymentFields: View {
                 if recordsPayment {
                     VStack(alignment: .leading, spacing: AppStyle.Spacing.medium) {
                         amountEntry
-                        paymentMethodChoices
+                        if usesMobileLayout { paymentMethodPicker }
+                        else { paymentMethodChoices }
                     }
                     .disabled(!model.canRecordPayment || model.isSaving)
                 }
+            }
+            .onChange(of: recordsPayment, initial: true) {
+                if usesMobileLayout { isAmountFocused = recordsPayment && model.canRecordPayment }
             }
             .listRowBackground(AppStyle.Colors.accent.opacity(0.12))
         }
@@ -53,7 +59,7 @@ struct InvoicePaymentFields: View {
             } else if let discount = model.content.payment?.discount, discount != "0" {
                 LabeledContent("invoicePayment.discount", value: discount)
             }
-            if let totals = model.paymentTotals {
+            if !usesMobileLayout, let totals = model.paymentTotals {
                 LabeledContent("invoices.payment") {
                     Text(totals.payment, format: .number.precision(.fractionLength(2))).monospacedDigit()
                 }
@@ -64,6 +70,21 @@ struct InvoicePaymentFields: View {
         } footer: {
             Text("invoicePayment.localHint")
         }
+    }
+
+    private var paymentMethodPicker: some View {
+        Picker(selection: Binding(
+            get: { model.content.payment?.method }, set: { model.setPaymentMethod($0) }
+        )) {
+            Text("invoicePayment.chooseMethod").tag(nil as InvoiceDraftPayment.Method?)
+            ForEach(InvoiceDraftPayment.Method.allCases) { method in
+                Label(LocalizedStringKey(method.title), systemImage: method.symbol).tag(Optional(method))
+            }
+        } label: {
+            Label("invoicePayment.method", systemImage: "creditcard")
+        }
+        .pickerStyle(.menu)
+        .frame(minHeight: 44)
     }
 
     private var paymentMethodChoices: some View {
@@ -112,12 +133,14 @@ struct InvoicePaymentFields: View {
                 #if os(iOS)
                 .keyboardType(.decimalPad)
                 #endif
-                .font(.title3.weight(.semibold))
+                .font(usesMobileLayout ? .largeTitle.weight(.semibold) : .title3.weight(.semibold))
+                .multilineTextAlignment(usesMobileLayout ? .trailing : .leading)
                 .monospacedDigit()
                 .padding(.horizontal, AppStyle.Spacing.medium)
-                .frame(minHeight: 44)
+                .frame(minHeight: usesMobileLayout ? 56 : 44)
                 .overlay { RoundedRectangle(cornerRadius: 8).strokeBorder(.quaternary) }
                 .accessibilityLabel(Text("invoicePayment.amount"))
+                .focused($isAmountFocused)
         }
         .padding(.vertical, AppStyle.Spacing.small)
     }

@@ -27,7 +27,7 @@ struct InvoiceCreationUploader {
                         try await store.saveInitialPaymentReceipt(creationID: operation.id, receipt: receipt)
                     }
                     guard let current = try await store.invoiceCreation(draftID: operation.draftID),
-                          current.state == .pending, let request = current.invoiceRequest else { continue }
+                          current.id == operation.id, current.state == .pending, let request = current.invoiceRequest else { continue }
                     stage = .invoice
                     let path = current.plan.content.assignedPickup == nil ? "invoices/sync/create" : "invoices/sync/create-assigned"
                     let invoice = try await client.post(path, encodedBody: request, capturesServerFailure: true, as: Invoice.self)

@@ -25,7 +25,7 @@ struct InvoiceDraftListView: View {
                         .disabled(!model.isAvailable || model.assignedOnly || model.availableReservations == 0)
                 }
             }
-            .safeAreaInset(edge: .top, spacing: 0) { ConnectionStatusView() }
+            .connectionStatus()
             .task { await model.load() }
             .onChange(of: synchronization.lastFinishedAt) { Task { await model.load() } }
             .sheet(item: $pool, onDismiss: { Task { await model.load() } }) { InvoicePoolView(model: $0) }

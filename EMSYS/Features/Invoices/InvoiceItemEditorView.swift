@@ -17,7 +17,7 @@ struct InvoiceItemEditorView: View {
             }
             .formStyle(.grouped)
             .navigationTitle("invoiceEdits.editorTitle")
-            .safeAreaInset(edge: .top, spacing: 0) { ConnectionStatusView() }
+            .connectionStatus()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("invoiceEdits.cancel") {

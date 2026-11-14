@@ -1,6 +1,39 @@
 import SwiftUI
 
-struct ConnectionStatusView: View {
+extension View {
+    func connectionStatus() -> some View {
+        modifier(ConnectionStatusModifier())
+    }
+}
+
+private struct ConnectionStatusModifier: ViewModifier {
+    @Environment(NetworkConnection.self) private var connection
+    @Environment(SynchronizationState.self) private var synchronization
+    @State private var showsWarning = false
+
+    func body(content: Content) -> some View {
+        content
+            .safeAreaInset(edge: .top, spacing: 0) { ConnectionStatusView() }
+            .toolbar {
+                if synchronization.failed, !synchronization.isRunning, connection.status != .unavailable {
+                    Button {
+                        showsWarning = true
+                    } label: {
+                        Label("sync.warning", systemImage: "exclamationmark.triangle.fill")
+                            .labelStyle(.iconOnly)
+                            .foregroundStyle(.orange)
+                    }
+                }
+            }
+            .alert("sync.warning", isPresented: $showsWarning) {
+                Button("documents.close", role: .cancel) { }
+            } message: {
+                Text(synchronization.requiresReview ? "sync.reviewRequired" : "sync.failed")
+            }
+    }
+}
+
+private struct ConnectionStatusView: View {
     @Environment(NetworkConnection.self) private var connection
     @Environment(SynchronizationState.self) private var synchronization
 
@@ -19,10 +52,6 @@ struct ConnectionStatusView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(AppStyle.Spacing.small)
-            } else if synchronization.failed, connection.status != .unavailable {
-                Label(synchronization.requiresReview ? "sync.reviewRequired" : "sync.failed", systemImage: "exclamationmark.triangle")
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(AppStyle.Spacing.small)
             }
         }
         .font(.callout)

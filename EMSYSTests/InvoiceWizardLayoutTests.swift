@@ -31,7 +31,7 @@ final class InvoiceWizardLayoutTests: XCTestCase {
             ForEach(fixture.items.indices, id: \.self) { index in
                 @Bindable var fixture = fixture
                 InvoiceDraftItemFields(item: $fixture.items[index], priceFocusRequest: $fixture.request,
-                    canChooseCatalogItems: true, choose: {}, remove: {})
+                    canChooseCatalogItems: true, choose: {}, remove: {}, usesMobileLayout: true)
             }
         })
         let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
@@ -44,9 +44,13 @@ final class InvoiceWizardLayoutTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(300))
         fixture.items[0].unitPrice = "12.50"
         fixture.request = fixture.items[0].id
-        try await Task.sleep(for: .milliseconds(500))
+        for _ in 0..<20 {
+            if fixture.request == nil { break }
+            try await Task.sleep(for: .milliseconds(50))
+        }
 
         let input = try XCTUnwrap(focusedTextInput(in: host.view))
+        XCTAssertEqual((input as? UITextField)?.keyboardType, .decimalPad)
         let selection = try XCTUnwrap(input.selectedTextRange)
         XCTAssertEqual(input.text(in: selection), "12.50")
         XCTAssertNil(fixture.request)

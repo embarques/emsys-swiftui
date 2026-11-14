@@ -35,6 +35,37 @@ final class PickupWorkflowTests: XCTestCase {
             try XCTUnwrap(image.pngData()).write(to: FileManager.default.temporaryDirectory.appending(path: "emsys-pickup-\(device).png"))
         }
     }
+    func testPickupRowsRenderWithAndWithoutInvoiceNumbers() async throws {
+        let linkedPickup = try fixture()
+        let unlinkedPickup = try fixture(id: 43, completed: true)
+        let host = UIHostingController(rootView: NavigationStack {
+            List {
+                NavigationLink { Text("Pickup") } label: {
+                    PickupRowView(pickup: linkedPickup, invoiceNumbers: ["INV-26-001459"])
+                }
+                NavigationLink { Text("Pickup") } label: {
+                    PickupRowView(pickup: unlinkedPickup)
+                }
+            }
+            .navigationTitle("navigation.pickups")
+        }.environment(\.locale, Locale(identifier: "es-DO")))
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let previous = scene.windows.first(where: \.isKeyWindow)
+        let window = UIWindow(windowScene: scene)
+        window.frame = scene.effectiveGeometry.coordinateSpace.bounds
+        window.overrideUserInterfaceStyle = .dark
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true; previous?.makeKey() }
+        try await Task.sleep(for: .milliseconds(500))
+        window.layoutIfNeeded()
+        let image = UIGraphicsImageRenderer(bounds: window.bounds).image { _ in
+            window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
+        }
+        let device = UIDevice.current.userInterfaceIdiom == .pad ? "ipad" : "iphone"
+        try XCTUnwrap(image.pngData()).write(to: FileManager.default.temporaryDirectory
+            .appending(path: "emsys-pickup-invoice-row-\(device).png"))
+    }
     #endif
     func testSnapshotsSurviveReopenAndRemainScopedToUserTenantAndServer() async throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)

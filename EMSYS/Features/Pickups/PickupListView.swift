@@ -3,15 +3,28 @@ import SwiftUI
 struct PickupListView: View {
     @Environment(AuthenticationSession.self) private var session
     @Environment(NetworkConnection.self) private var connection
+    @Environment(SynchronizationState.self) private var synchronization
     @State private var model: PickupListModel?
     @State private var query = PickupListQuery()
     @State private var issue: String?
     @State private var refreshVersion = 0
+    @State private var invoiceNumbers: [UInt32: [String]] = [:]
+    @State private var invoiceNumbersContext: UUID?
     @State private var invoiceDrafts: InvoiceDraftListModel?
     @State private var showsMap = false
     @State private var mapModel = PickupMapModel(pickups: [])
 
     private var online: Bool { connection.status != .unavailable }
+
+    private var canReadInvoiceNumbers: Bool {
+        session.canViewInvoices || session.canCreateAssignedPickupInvoices
+    }
+
+    private var invoiceNumberRequest: InvoiceNumberRequest {
+        InvoiceNumberRequest(context: session.contextID, pickupIDs: model?.pickups.map(\.id) ?? [],
+            hasAccess: canReadInvoiceNumbers,
+            refreshVersion: refreshVersion, lastSync: synchronization.lastFinishedAt)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -51,6 +64,7 @@ struct PickupListView: View {
         .refreshable { await model?.load(query: query, online: online) }
         .onChange(of: model?.pickups) { mapModel.update(model?.pickups ?? []) }
         .task(id: session.contextID) { await prepare() }
+        .task(id: invoiceNumberRequest) { await loadInvoiceNumbers(invoiceNumberRequest) }
         .task(id: Request(query: query, online: online, refreshVersion: refreshVersion)) {
             do {
                 if !query.text.isEmpty { try await Task.sleep(for: .milliseconds(250)) }
@@ -85,7 +99,10 @@ struct PickupListView: View {
                 ForEach(model.pickups) { pickup in
                     NavigationLink {
                         pickupDetail(pickup, model: model)
-                    } label: { PickupRowView(pickup: pickup) }
+                    } label: {
+                        PickupRowView(pickup: pickup, invoiceNumbers: canReadInvoiceNumbers && invoiceNumbersContext == session.contextID
+                            ? invoiceNumbers[pickup.id, default: []] : [])
+                    }
                 }
                 if model.isLoading { ProgressView().frame(maxWidth: .infinity) }
                 if model.hasMore, online {
@@ -109,6 +126,34 @@ struct PickupListView: View {
             .onDisappear { refreshVersion += 1 }
     }
 
+    private struct InvoiceNumberRequest: Equatable {
+        let context: UUID
+        let pickupIDs: [UInt32]
+        let hasAccess: Bool
+        let refreshVersion: Int
+        let lastSync: Date?
+    }
+
+    private func loadInvoiceNumbers(_ request: InvoiceNumberRequest) async {
+        guard request.hasAccess, !request.pickupIDs.isEmpty else {
+            invoiceNumbers = [:]
+            return
+        }
+        do {
+            let access = try await session.invoiceAccess(allowAssignedCreation: true)
+            let links = try await access.store.pickupInvoiceLinks(pickupIDs: request.pickupIDs)
+            guard !Task.isCancelled, request == invoiceNumberRequest else { return }
+            invoiceNumbers = links.mapValues { links in
+                var seen = Set<String>()
+                return links.compactMap(\.number).filter { seen.insert($0).inserted }
+            }
+            invoiceNumbersContext = request.context
+        } catch {
+            guard !Task.isCancelled, request == invoiceNumberRequest else { return }
+            invoiceNumbers = [:]
+        }
+    }
+
     private struct Request: Equatable {
         let query: PickupListQuery
         let online: Bool
@@ -122,6 +167,7 @@ struct PickupListView: View {
 
     private func prepare() async {
         model = nil
+        invoiceNumbers = [:]
         issue = nil
         let contextID = session.contextID
         do {

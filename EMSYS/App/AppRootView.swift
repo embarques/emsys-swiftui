@@ -17,7 +17,7 @@ struct AppRootView: View {
             } else {
                 NavigationStack {
                     accountContent
-                        .safeAreaInset(edge: .top, spacing: 0) { ConnectionStatusView() }
+                        .connectionStatus()
                         .toolbar {
                             NavigationLink { SettingsView() } label: {
                                 Label(AppDestination.settings.title, systemImage: AppDestination.settings.systemImageName)
@@ -123,7 +123,7 @@ struct AppRootView: View {
             } else {
                 NavigationStack {
                     destinationContent(destination)
-                        .safeAreaInset(edge: .top, spacing: 0) { ConnectionStatusView() }
+                        .connectionStatus()
                 }
             }
         }
@@ -134,7 +134,7 @@ struct AppRootView: View {
         } detail: {
             NavigationStack {
                 destinationContent(selectedDestination ?? .invoices)
-                    .safeAreaInset(edge: .top, spacing: 0) { ConnectionStatusView() }
+                    .connectionStatus()
             }
             .id(selectedDestination)
         }

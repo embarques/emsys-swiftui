@@ -272,10 +272,32 @@ final class InvoiceDraftEditorModel: Identifiable {
         return try await InvoiceLocalPrinting.generatePending(operation, store: store, language: language, printedBy: printedBy)
     }
 
+    var canReplaceInvoiceNumber: Bool {
+        isAvailable && financialPermission(.createInvoice) && !isSaving && creation?.canReplaceInvoiceNumber == true
+    }
+
+    func replaceDuplicateInvoiceNumber() async {
+        guard canReplaceInvoiceNumber, let creation else { return }
+        isSaving = true
+        issue = nil
+        defer { isSaving = false }
+        do {
+            let replacement = try await store.replaceDuplicateInvoiceNumber(creationID: creation.id)
+            guard isAvailable else { return }
+            self.creation = replacement
+            createdInvoiceNumber = replacement.plan.reservation?.number
+        } catch InvoiceStore.StoreError.invoicePoolEmpty {
+            if isAvailable { issue = "invoiceCreation.replacementPoolEmpty" }
+        } catch {
+            if isAvailable { issue = "invoiceCreation.queueError" }
+        }
+    }
+
     func retryCreation() async {
         guard isAvailable, financialPermission(.createInvoice), let creation,
               creation.state != .completed, !isSaving else { return }
         isSaving = true
+        issue = nil
         defer { isSaving = false }
         do {
             try await store.setInvoiceCreationState(id: creation.id, state: .pending)

@@ -87,13 +87,13 @@ struct InvoiceListView: View {
     private var invoiceSplitView: some View {
         NavigationSplitView(preferredCompactColumn: $selection.compactColumn) {
             directory
-                .safeAreaInset(edge: .top, spacing: 0) { ConnectionStatusView() }
+                .connectionStatus()
                 .navigationSplitViewColumnWidth(min: 260, ideal: 310, max: 380)
         } detail: {
             if let selectedDetail = selection.detail {
                 InvoiceDetailView(model: selectedDetail)
                     .id(selectedDetail.invoice.id)
-                    .safeAreaInset(edge: .top, spacing: 0) { ConnectionStatusView() }
+                    .connectionStatus()
             } else {
                 ContentUnavailableView("invoices.selectInvoice", systemImage: "doc.text")
             }
