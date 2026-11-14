@@ -33,7 +33,9 @@ enum AppDestination: String, CaseIterable, Identifiable {
             ["canViewDelivery", "canViewAssignedDeliveries"].contains {
                 permissions?.contains($0, resourceType: "delivery") == true
             }
-        case .dailyIncome: permissions?.contains("canViewIncomeStatement", resourceType: "income_statement") == true
+        case .dailyIncome:
+            permissions?.contains("canViewIncomeStatement", resourceType: "income_statement") == true
+                && permissions?.contains("canViewJournal", resourceType: "journal") == true
         }
     }
 }

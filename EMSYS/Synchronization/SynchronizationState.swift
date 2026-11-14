@@ -67,7 +67,8 @@ final class SynchronizationState {
             guard generation == currentGeneration else { return true }
             failed = true
             switch error {
-            case InvoiceMutationUploader.UploadError.attentionRequired,
+            case IncomeJournalService.UploadError.attentionRequired,
+                 InvoiceMutationUploader.UploadError.attentionRequired,
                  InvoiceCreationUploader.UploadError.attentionRequired,
                  InvoiceEditUploader.UploadError.attentionRequired,
                  InvoiceAttachmentUploader.UploadError.attentionRequired,

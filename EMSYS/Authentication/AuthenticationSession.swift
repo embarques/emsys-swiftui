@@ -80,6 +80,36 @@ final class AuthenticationSession {
         return (client, store)
     }
 
+    var canViewIncome: Bool {
+        phase == .signedIn && AppDestination.dailyIncome.isAccessible(with: permissions)
+    }
+
+    var canPostIncomeJournal: Bool {
+        canViewIncome && permissions?.contains("canCreateJournal", resourceType: "journal") == true
+    }
+
+    var canPrepareIncomeJournal: Bool {
+        canPostIncomeJournal && permissions?.contains("canViewChartAccount", resourceType: "chart_account") == true
+    }
+
+    func incomeAccess() async throws -> (client: APIClient, store: IncomeStore) {
+        guard canViewIncome, let apiBaseURL, let userID = auth?.currentUser?.uid, let companyID else {
+            throw AuthenticationIssue.authorization
+        }
+        let sessionID = generation
+        guard let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            throw AuthenticationIssue.configuration
+        }
+        let store = try await IncomeStore.open(directory: directory.appending(path: "EMSYS/Income", directoryHint: .isDirectory),
+            userID: userID, companyID: companyID, apiEnvironment: apiBaseURL.absoluteString)
+        guard generation == sessionID, canViewIncome else { throw APIClientError.sessionChanged }
+        let client = try APIClient(baseURL: apiBaseURL) { [weak self] forceRefresh in
+            guard let self, self.generation == sessionID, self.canViewIncome else { throw APIClientError.sessionChanged }
+            return try await self.credentials(forceRefresh: forceRefresh)
+        }
+        return (client, store)
+    }
+
     var canCreateInvoices: Bool {
         canViewInvoices && permissions?.contains("canCreateInvoice", resourceType: "invoice") == true
     }

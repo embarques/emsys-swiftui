@@ -36,10 +36,14 @@ struct AppRootView: View {
             Task { await synchronize(includesDownloads: false) }
         }
         .task(id: automaticSyncTrigger) {
-            guard connection.status == .available, (session.canViewInvoices || session.canViewPickups),
+            guard connection.status == .available, canSynchronize,
                   scenePhase == .active else { return }
             await synchronize()
         }
+    }
+
+    private var canSynchronize: Bool {
+        session.canViewInvoices || session.canViewPickups || session.canPostIncomeJournal
     }
 
     private struct AutomaticSyncTrigger: Equatable {
@@ -51,13 +55,13 @@ struct AppRootView: View {
 
     private var automaticSyncTrigger: AutomaticSyncTrigger {
         AutomaticSyncTrigger(
-            sessionID: session.contextID, isAuthorized: session.canViewInvoices || session.canViewPickups,
+            sessionID: session.contextID, isAuthorized: canSynchronize,
             connection: connection.status, isActive: scenePhase == .active
         )
     }
 
     private func synchronize(includesDownloads: Bool = true) async {
-        guard (session.canViewInvoices || session.canViewPickups), connection.status != .unavailable, scenePhase == .active else { return }
+        guard canSynchronize, connection.status != .unavailable, scenePhase == .active else { return }
         let sessionID = session.contextID
         synchronization.useSession(sessionID)
         let requestedUploadVersion = synchronization.requestedUploadVersion
@@ -65,7 +69,7 @@ struct AppRootView: View {
         let previousDownload = synchronization.lastDownloadedAt
         while true {
             if synchronization.isRunning { await synchronization.waitForCurrentRun() }
-            guard !Task.isCancelled, session.contextID == sessionID, (session.canViewInvoices || session.canViewPickups),
+            guard !Task.isCancelled, session.contextID == sessionID, canSynchronize,
                   connection.status != .unavailable, scenePhase == .active else { return }
             let fulfilled = includesDownloads
                 ? synchronization.lastDownloadedAt != previousDownload
@@ -102,6 +106,14 @@ struct AppRootView: View {
                         let access = try await session.invoiceAccess(allowAssignedCreation: true)
                         try await AssignedInvoicePreparation(client: access.client, store: access.store,
                             isAuthorized: { session.contextID == sessionID && session.canCreateAssignedPickupInvoices }).download()
+                    }
+                } catch is CancellationError { throw CancellationError() }
+                catch { failure = failure ?? error }
+                do {
+                    if session.canPostIncomeJournal, let branchID = session.user?.branch?.id {
+                        let access = try await session.incomeAccess()
+                        try await IncomeJournalService(client: access.client, store: access.store).upload(branchID: branchID,
+                            isAuthorized: { session.contextID == sessionID && session.canPostIncomeJournal })
                     }
                 } catch is CancellationError { throw CancellationError() }
                 catch { failure = failure ?? error }
@@ -161,7 +173,10 @@ struct AppRootView: View {
         case .pickups:
             if session.canViewPickups { PickupListView() }
             else { UnavailableDestinationView(destination: destination, isAuthorized: false) }
-        case .deliveries, .dailyIncome:
+        case .dailyIncome:
+            if session.canViewIncome { IncomeView() }
+            else { UnavailableDestinationView(destination: destination, isAuthorized: false) }
+        case .deliveries:
             UnavailableDestinationView(destination: destination, isAuthorized: destination.isAccessible(with: session.permissions))
         }
     }
