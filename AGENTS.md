@@ -11,6 +11,41 @@ Review changed code against these conventions and run the relevant validation
 before reporting completion. These rules apply to new code and modifications to
 existing code.
 
+## Required MVVM and Repository Architecture
+
+Use MVVM for feature screens and the Repository pattern for business data access.
+Before implementing a feature, identify the Model, View, ViewModel, and data
+access responsibilities in the proposal. Keep the View focused on rendering and
+user input, the ViewModel on screen state and actions, and the Model on data and
+business rules. Keep SQL, HTTP requests, and synchronization mechanics behind
+the feature's repository boundary.
+
+Reuse an existing store as the repository when it already exposes the operations
+the feature needs. Introduce a repository type when it owns data coordination.
+For offline workflows, read from local SQLite and preserve the atomic write of
+business data and its outbox operation. The server remains authoritative for
+confirmation. See [MVVM and repositories](docs/code-conventions.md#mvvm-and-repositories).
+
+Before reporting work complete, trace a changed workflow from the screen through
+data access and review the diff for clear responsibilities, navigable file
+structure, readable and commented logic, and unnecessary database, network, or
+main-thread work. Run the required verification gate and inspect changed layouts
+on the relevant device sizes. Address issues introduced by the change before
+reporting completion.
+
+## Required Comments and Readable Logic
+
+Every code change, including tests, must document each new or modified function,
+initializer, and computed property with a comment explaining its purpose. Comment
+each distinct block of logic where it occurs, including validation, branching,
+loops, transformations, and error handling. Update comments when behavior changes.
+
+Write logic as clear, multiline statements. Expand one-line control flow and
+replace nested ternaries, dense inline closures, and compressed expressions with
+named intermediate values or explicit branches. Review the diff against these
+requirements before reporting the work complete.
+See [Comments and readable logic](docs/code-conventions.md#comments-and-readable-logic).
+
 ## Required Verification Gate
 
 After every code or dependency change, run `./scripts/verify.sh` before moving to
