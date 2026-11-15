@@ -120,6 +120,19 @@ These requirements apply to new and modified production code and tests.
 
 ## Validation
 
+The source quality check in `./scripts/verify.sh` flags catch-all source folder
+names, legacy Observation APIs, and new references to `APIClient`,
+`URLSession`, or GRDB imports in feature presentation files. Run it on its own
+with `python3 scripts/check-source-quality.py`. When removing an existing
+`APIClient` reference, reduce or delete its per-file entry in
+`scripts/source-quality-api-client-baseline.json`.
+
+The check scans source text. Review the actual call path for indirect access to
+transport or persistence. Read changed APIs at their call sites, check that
+comments explain business constraints, and test behavior and recovery at the
+layer that owns it. Run the verification script tests with
+`python3 -B -m unittest discover -s scripts/tests`.
+
 Name test suites after the behavior or type they verify, such as
 `AppPreferencesTests` and `AppLanguageTests`. Test externally observable behavior
 and recovery paths rather than duplicating implementation details.

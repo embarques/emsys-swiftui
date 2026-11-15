@@ -12,6 +12,7 @@ if [[ $# -ne 0 ]]; then
     exit 2
 fi
 
+# Run each check in order and preserve its output for diagnosis.
 verify() {
     local name="$1"
     shift
@@ -33,6 +34,7 @@ verify() {
 }
 
 common=(-project "$project" -scheme EMSYS)
+verify source-quality python3 -B "$project_root/scripts/check-source-quality.py"
 verify xcode-cloud-setup python3 "$project_root/scripts/test-xcode-cloud-setup.py"
 verify packages xcodebuild "${common[@]}" -resolvePackageDependencies -onlyUsePackageVersionsFromResolvedFile
 verify destinations xcodebuild "${common[@]}" -showdestinations -disableAutomaticPackageResolution
