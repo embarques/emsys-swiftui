@@ -5,7 +5,9 @@ struct MessagePanel: View {
     var icon = "bell"
     var actionTitle: LocalizedStringKey?
     var action: (() -> Void)?
+    var detail: Text?
 
+    /// Displays a message, optional diagnostic detail, and its recovery action.
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: icon)
@@ -15,6 +17,10 @@ struct MessagePanel: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text("messages.title").font(.headline).accessibilityAddTraits(.isHeader)
                 Text(message).font(.callout).foregroundStyle(.secondary)
+                // Keep the reason with the message and place any recovery action after it.
+                if let detail {
+                    detail.font(.callout).foregroundStyle(.secondary)
+                }
                 if let actionTitle, let action {
                     Button(actionTitle, action: action).buttonStyle(.bordered)
                 }

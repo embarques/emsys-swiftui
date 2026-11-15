@@ -22,6 +22,7 @@ struct InvoiceDirectoryView: View {
     let more: () async -> Void
     let retry: () async -> Void
     let refresh: () async -> Void
+    var poolWarning: InvoicePoolWarningView? = nil
 
     private var directoryInvoices: [Invoice] {
         let pinned = Set(localEntries.compactMap { $0.invoice?.id })
@@ -54,6 +55,10 @@ struct InvoiceDirectoryView: View {
     var body: some View {
         List {
             Group {
+                // Keep reservation messages aligned with the directory's content.
+                if let poolWarning {
+                    poolWarning.padding(.bottom, AppStyle.Spacing.small)
+                }
                 header.padding(.bottom, usesSidebarRows ? 12 : 20)
                 if isDownloaded {
                     Label("invoiceList.downloaded", systemImage: "internaldrive")

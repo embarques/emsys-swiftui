@@ -8,6 +8,38 @@ import UIKit
 
 @MainActor
 final class InvoiceCreationOutboxTests: XCTestCase {
+    /// Keeps a transient HTTP failure visible while preserving the queued payment request.
+    func testTransientPaymentFailureKeepsRetryAndServerReason() async throws {
+        // Queue a payment and simulate a service failure before receiving a receipt.
+        let directory = temporaryDirectory()
+        defer {
+            try? FileManager.default.removeItem(at: directory)
+        }
+        let store = try await open(directory)
+        let operation = try await store.queueInvoiceCreation(draftID: UUID(), expectedRevision: nil,
+                                                              plan: makePlan(payment: "5"))
+        let response = Data(#"{"success":false,"message":"Service unavailable"}"#.utf8)
+        let (client, session) = try makeClient([.status(503, response)])
+        defer {
+            session.invalidateAndCancel()
+        }
+
+        // The run should report the HTTP failure and leave the outbox eligible for retry.
+        do {
+            try await InvoiceCreationUploader(client: client, store: store).synchronize()
+            XCTFail("Expected a transient failure")
+        } catch APIClientError.httpStatus(503) {
+            let queued = try await store.pendingInvoiceCreations()
+            let saved = try XCTUnwrap(queued.first)
+            XCTAssertEqual(saved.id, operation.id)
+            XCTAssertEqual(saved.journalRequest, operation.journalRequest)
+            XCTAssertNil(saved.paymentReceipt)
+            XCTAssertEqual(saved.failure?.stage, .payment)
+            XCTAssertEqual(saved.failure?.status, 503)
+            XCTAssertEqual(saved.failure?.message, "Service unavailable")
+        }
+    }
+
     func testQueueCommitsFrozenDraftAndOperationAndProtectsPendingWork() async throws {
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }

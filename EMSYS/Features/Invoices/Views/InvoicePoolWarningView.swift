@@ -6,33 +6,20 @@ struct InvoicePoolWarningView: View {
     let threshold: Int
     let openPool: () -> Void
 
+    /// Presents reservation status in the same panel as other app messages.
     var body: some View {
-        if issue != nil || isLow {
-            VStack(alignment: .leading, spacing: 0) {
-                if let issue {
-                    Text(LocalizedStringKey(issue))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(AppStyle.Spacing.small)
-                }
-                if isLow {
-                    Button(action: openPool) {
-                        Label(count == 0 ? "invoicePool.empty" : "invoicePool.low",
-                              systemImage: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.orange)
-                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                            .padding(.horizontal, AppStyle.Spacing.small)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
+        VStack(spacing: AppStyle.Spacing.small) {
+            // A failed refresh and a low local balance can be relevant at the same time.
+            if let issue {
+                MessagePanel(message: LocalizedStringKey(issue), icon: "exclamationmark.triangle")
             }
-            .font(.caption)
-            .fixedSize(horizontal: false, vertical: true)
-            .background(.background, ignoresSafeAreaEdges: [])
+            if let count, count <= threshold {
+                let message: LocalizedStringKey = count == 0 ? "invoicePool.empty" : "invoicePool.low"
+                MessagePanel(message: message, icon: "exclamationmark.triangle",
+                             actionTitle: "invoicePool.title", action: openPool)
+            }
         }
     }
-
-    private var isLow: Bool { count.map { $0 <= threshold } ?? false }
 }
 
 struct InvoicePoolCountView: View {

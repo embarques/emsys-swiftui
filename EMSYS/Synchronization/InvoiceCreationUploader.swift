@@ -55,6 +55,9 @@ struct InvoiceCreationUploader {
                     try await store.completeInvoiceCreation(id: operation.id, invoice: invoice)
                 } catch let error as APIServerFailure {
                     // Persist the stage and rejection reason without replacing the frozen request.
+                    let failure = PendingInvoiceCreation.Failure(
+                        stage: stage, status: error.status, code: error.code,
+                        message: error.message.map { String($0.prefix(300)) })
                     let state: PendingInvoiceCreation.State
                     switch error.status {
                     case 400, 409, 422:
@@ -64,12 +67,17 @@ struct InvoiceCreationUploader {
                     case 404, 405, 413:
                         state = .serverUnavailable
                     default:
+                        // Leave transient failures queued while exposing the failed request to the confirmation.
+                        try await store.setInvoiceCreationState(id: operation.id, state: .pending, failure: failure)
                         throw APIClientError.httpStatus(error.status)
                     }
-                    try await store.setInvoiceCreationState(id: operation.id, state: state,
-                        failure: .init(stage: stage, status: error.status, code: error.code,
-                                       message: error.message.map { String($0.prefix(300)) }))
+                    try await store.setInvoiceCreationState(id: operation.id, state: state, failure: failure)
                     needsAttention = true
+                } catch let error as DecodingError {
+                    // An unreadable response may follow a committed request. Keep the same request for retry.
+                    try await store.setInvoiceCreationState(id: operation.id, state: .pending,
+                        failure: .init(stage: stage, status: nil))
+                    throw error
                 } catch InvoiceCreationPlan.PlanError.invalidReceipt, InvoiceStore.StoreError.invalidCreationReceipt {
                     // A decoded but inconsistent acknowledgement needs explicit
                     // review. Keep frozen bytes and any confirmed payment, and

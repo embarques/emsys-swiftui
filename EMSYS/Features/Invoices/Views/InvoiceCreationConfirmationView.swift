@@ -152,6 +152,10 @@ struct InvoiceCreationConfirmationView: View {
     /// Presents the saved invoice, payment acknowledgement, and recovery actions.
     private var creationStatus: some View {
         VStack(spacing: 20) {
+            // Put the saved server reason and recovery action before the invoice summary.
+            if let failure = operation.failure {
+                failurePanel(failure)
+            }
             confirmationSummary(operation)
             // Show money as recorded only when the server supplied a payment receipt.
             if let receipt = operation.paymentReceipt {
@@ -175,32 +179,6 @@ struct InvoiceCreationConfirmationView: View {
                 }
             }
             confirmationDetails(operation)
-            // A failed submission keeps its actionable details next to the draft.
-            if let failure = operation.failure {
-                confirmationCard {
-                    VStack(alignment: .leading, spacing: AppStyle.Spacing.small) {
-                        HStack(alignment: .firstTextBaseline) {
-                            Label(LocalizedStringKey(failure.stage.title), systemImage: "exclamationmark.circle")
-                                .font(.headline).foregroundStyle(.orange)
-                            if operation.canReplaceInvoiceNumber {
-                                Spacer()
-                                replaceInvoiceNumberButton
-                            }
-                        }
-                        if failure.requiresCloseout {
-                            Text(canOpenCloseout ? "invoiceCreation.closeout.required" : "invoiceCreation.closeout.ask")
-                                .font(.callout).foregroundStyle(.secondary)
-                        } else if let message = failure.message, !message.isEmpty {
-                            Text(verbatim: message).font(.callout).foregroundStyle(.secondary)
-                        } else if let status = failure.status {
-                            Text("HTTP \(status.formatted(.number.grouping(.never)))")
-                                .font(.caption).foregroundStyle(.secondary)
-                        } else {
-                            Text("invoiceCreation.failure.receipt").font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                }
-            }
             // A chosen replacement stays pending until the user retries synchronization.
             if operation.state == .replacementReady {
                 confirmationCard {
@@ -209,7 +187,12 @@ struct InvoiceCreationConfirmationView: View {
                             .font(.callout)
                             .foregroundStyle(.secondary)
                         Spacer()
-                        replaceInvoiceNumberButton
+                        Button("invoiceCreation.replaceNumber") {
+                            Task {
+                                await model.replaceDuplicateInvoiceNumber()
+                            }
+                        }
+                        .disabled(!model.canReplaceInvoiceNumber || synchronization.isRunning)
                     }
                 }
             }
@@ -245,17 +228,35 @@ struct InvoiceCreationConfirmationView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    /// Requests a new number when the current invoice is eligible for replacement.
-    private var replaceInvoiceNumberButton: some View {
-        Button {
-            Task {
-                await model.replaceDuplicateInvoiceNumber()
+    /// Shows the failed stage and server reason with the available recovery action.
+    private func failurePanel(_ failure: PendingInvoiceCreation.Failure) -> some View {
+        let message = LocalizedStringKey(failure.stage.title)
+        var panel = MessagePanel(message: message, icon: "exclamationmark.triangle",
+                                 detail: failureDetail(failure))
+        // The saved operation determines whether changing its reservation is safe.
+        if operation.canReplaceInvoiceNumber {
+            panel.actionTitle = "invoiceCreation.replaceNumber"
+            panel.action = {
+                Task {
+                    await model.replaceDuplicateInvoiceNumber()
+                }
             }
-        } label: {
-            Label("invoiceCreation.replaceNumber", systemImage: "arrow.3.trianglepath")
-                .labelStyle(.iconOnly)
-                .frame(minWidth: 44, minHeight: 44)
         }
-        .disabled(!model.canReplaceInvoiceNumber || synchronization.isRunning)
+        return panel.disabled(synchronization.isRunning)
+    }
+
+    /// Selects the most specific explanation available for the failure.
+    private func failureDetail(_ failure: PendingInvoiceCreation.Failure) -> Text {
+        // A closeout rejection has a localized recovery instruction.
+        if failure.requiresCloseout {
+            return Text(canOpenCloseout ? "invoiceCreation.closeout.required" : "invoiceCreation.closeout.ask")
+        }
+        if let reason = failure.message, !reason.isEmpty {
+            return Text(verbatim: reason)
+        }
+        if let status = failure.status {
+            return Text("HTTP \(status.formatted(.number.grouping(.never)))")
+        }
+        return Text("invoiceCreation.failure.receipt")
     }
 }

@@ -103,6 +103,21 @@ struct InvoiceListView: View {
     }
     #endif
 
+    /// Builds the reservation panel when the current session can act on it.
+    private func poolWarning(for model: InvoiceListViewModel) -> InvoicePoolWarningView? {
+        // A healthy or unknown count needs a panel only if the refresh failed.
+        let isLow = model.availableReservations.map { $0 <= model.poolThreshold } ?? false
+        guard session.canCreateInvoices, model.invoicePoolIssue != nil || isLow else {
+            return nil
+        }
+
+        return InvoicePoolWarningView(issue: model.invoicePoolIssue, count: model.availableReservations,
+                                      threshold: model.poolThreshold) {
+            sheet = .pool(draftListModel(model).pool())
+        }
+    }
+
+    /// Renders the directory and passes authorized reservation messages into its list.
     private var directory: some View {
         ZStack {
             if let model {
@@ -117,7 +132,8 @@ struct InvoiceListView: View {
                     printInvoice: session.canPrintInvoices ? { printInvoice($0, model: model) } : nil,
                     more: { await model.loadMore(online: online) },
                     retry: { await model.retry(online: online) },
-                    refresh: { await model.request(query: query, online: online).value })
+                    refresh: { await model.request(query: query, online: online).value },
+                    poolWarning: poolWarning(for: model))
                 .task { await model.refreshInvoicePoolSummary() }
                 .toolbar {
                     if !usesInlineDirectoryActions {
@@ -137,14 +153,6 @@ struct InvoiceListView: View {
                     issue: loader.failed ? "invoices.unavailable" : nil,
                     showFilters: {}, open: { _ in }, printInvoice: nil, more: {},
                     retry: { await prepare() }, refresh: { await prepare() })
-            }
-        }
-        .safeAreaInset(edge: .top, spacing: 0) {
-            if session.canCreateInvoices, let model {
-                InvoicePoolWarningView(issue: model.invoicePoolIssue, count: model.availableReservations,
-                                       threshold: model.poolThreshold) {
-                    sheet = .pool(draftListModel(model).pool())
-                }
             }
         }
         .safeAreaInset(edge: .top, spacing: 0) {

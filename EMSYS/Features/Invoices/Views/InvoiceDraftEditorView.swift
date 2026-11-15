@@ -68,7 +68,8 @@ struct InvoiceDraftEditorView: View {
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .safeAreaInset(edge: .bottom, spacing: 0) { wizardFooter }
-            .connectionStatus()
+            // The confirmation presents its own saved failure rather than a second generic warning.
+            .connectionStatus(showsSyncFailure: model.creation?.failure == nil)
             .safeAreaInset(edge: .top, spacing: 0) {
                 VStack(spacing: 0) {
                     if model.creation == nil, !usesMobileEntryLayout {

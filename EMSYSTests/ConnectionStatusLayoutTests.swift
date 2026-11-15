@@ -6,14 +6,19 @@ import XCTest
 
 @MainActor
 final class ConnectionStatusLayoutTests: XCTestCase {
+    /// Checks the sync toolbar while the invoice messages and rows scroll beneath it.
     func testSyncWarningToolbarRendersAboveScrolledInvoiceRows() async throws {
+        // Trigger the synchronization warning before presenting the invoice fixture.
         let state = SynchronizationState()
         await state.synchronize { throw InvoiceMutationUploader.UploadError.attentionRequired }
         let content = AppTabNavigationView(selection: .constant(.invoices)) { _ in
             NavigationStack {
-                List(1...40, id: \.self) { index in
-                    Text("Factura de prueba \(index)")
-                        .listRowBackground(Color.blue)
+                List {
+                    InvoicePoolWarningView(issue: nil, count: 0, threshold: 10, openPool: {})
+                    ForEach(1...40, id: \.self) { index in
+                        Text("Factura de prueba \(index)")
+                            .listRowBackground(Color.blue)
+                    }
                 }
                     .navigationTitle("Facturas")
                     .toolbar {
@@ -21,15 +26,13 @@ final class ConnectionStatusLayoutTests: XCTestCase {
                         Button {} label: { Label("Actualizar facturas", systemImage: "arrow.clockwise") }
                         Button {} label: { Label("Acciones de facturas", systemImage: "ellipsis.circle") }
                     }
-                    .safeAreaInset(edge: .top, spacing: 0) {
-                        InvoicePoolWarningView(issue: nil, count: 5, threshold: 10, openPool: {})
-                    }
                     .connectionStatus()
             }
         }
         .environment(NetworkConnection())
         .environment(state)
         .environment(\.locale, Locale(identifier: "es-DO"))
+        // Use the active simulator window to exercise native navigation and toolbar layout.
         let host = UIHostingController(rootView: content)
         let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let previous = scene.windows.first(where: \.isKeyWindow)
@@ -38,9 +41,13 @@ final class ConnectionStatusLayoutTests: XCTestCase {
         window.overrideUserInterfaceStyle = .dark
         window.rootViewController = host
         window.makeKeyAndVisible()
-        defer { window.isHidden = true; previous?.makeKey() }
+        defer {
+            window.isHidden = true
+            previous?.makeKey()
+        }
         try await Task.sleep(for: .milliseconds(500))
         window.layoutIfNeeded()
+        // Move past the inline message before capturing the pinned sync indicator.
         let scroll = try XCTUnwrap(scrollView(in: host.view))
         scroll.setContentOffset(CGPoint(x: 0, y: 280), animated: false)
         try await Task.sleep(for: .milliseconds(250))
