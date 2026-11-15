@@ -19,8 +19,8 @@ final class InvoiceContainerSearchViewModel: Identifiable {
     @ObservationIgnored private let isAuthorized: () -> Bool
 
     /// Opens the container picker with the current session and offline store.
-    init(client: APIClient, store: InvoiceStore, isAuthorized: @escaping () -> Bool) {
-        self.repository = InvoiceDraftRepository(store: store, client: client)
+    init(repository: InvoiceDraftRepository, store: InvoiceStore, isAuthorized: @escaping () -> Bool) {
+        self.repository = repository
         self.store = store
         self.isAuthorized = isAuthorized
     }

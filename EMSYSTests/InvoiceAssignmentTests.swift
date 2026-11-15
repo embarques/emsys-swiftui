@@ -45,7 +45,7 @@ final class InvoiceAssignmentTests: XCTestCase {
             InvoicePickupBranch(id: 10, name: "Warehouse", code: "NY", type: "warehouse"),
             InvoicePickupBranch(id: 20, name: "Office", code: "NY", type: "office")
         ])
-        let model = InvoiceAssignmentPickerViewModel(source: .warehouse, client: try makeClient(), store: store,
+        let model = InvoiceAssignmentPickerViewModel(source: .warehouse, repository: InvoiceDraftRepository(store: store, client: try makeClient()), store: store,
             isAuthorized: { true }, canViewBranches: { true })
         await model.load(online: false)
         XCTAssertEqual(model.matchingEmployees.map(\.id), [1])
@@ -56,7 +56,7 @@ final class InvoiceAssignmentTests: XCTestCase {
         XCTAssertFalse(deliveryEmployee.isEligible)
         let inactive = InvoicePickupEmployee(id: 4, name: "Inactive", title: nil, department: nil, active: false, branch: nil)
         XCTAssertFalse(inactive.isEligible)
-        let officeModel = InvoiceAssignmentPickerViewModel(source: .office, client: try makeClient(), store: store,
+        let officeModel = InvoiceAssignmentPickerViewModel(source: .office, repository: InvoiceDraftRepository(store: store, client: try makeClient()), store: store,
             isAuthorized: { true }, canViewBranches: { true })
         await officeModel.load(online: false)
         XCTAssertEqual(officeModel.matchingEmployees.map(\.id), [2])
@@ -70,7 +70,7 @@ final class InvoiceAssignmentTests: XCTestCase {
         try await store.savePickupRoutes([previous])
         AssignmentProtocol.responses = [(200, try envelope((1...40).map { route($0) })), (500, Data())]
         AssignmentProtocol.requests = []
-        let model = InvoiceAssignmentPickerViewModel(source: .route, client: try makeClient(), store: store,
+        let model = InvoiceAssignmentPickerViewModel(source: .route, repository: InvoiceDraftRepository(store: store, client: try makeClient()), store: store,
             isAuthorized: { true }, canViewBranches: { false })
         await model.load(online: true)
         XCTAssertEqual(model.routes, [previous])
@@ -138,7 +138,7 @@ final class InvoiceAssignmentTests: XCTestCase {
         let store = try await InvoiceStore.open(directory: directory, userID: "user", companyID: "company")
         AssignmentProtocol.responses = [(200, Data(#"{"success":true,"data":[{"id":1,"name":"Office Person","department":"office","active":true,"loanAmountOwed":1234,"phones":[{"number":"5550100"}]}]}"#.utf8))]
         AssignmentProtocol.requests = []
-        let model = InvoiceAssignmentPickerViewModel(source: .office, client: try makeClient(), store: store,
+        let model = InvoiceAssignmentPickerViewModel(source: .office, repository: InvoiceDraftRepository(store: store, client: try makeClient()), store: store,
             isAuthorized: { true }, canViewBranches: { false })
         await model.load(online: true)
         XCTAssertEqual(model.matchingEmployees.map(\.id), [1])

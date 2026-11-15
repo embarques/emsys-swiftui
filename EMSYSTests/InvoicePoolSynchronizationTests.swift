@@ -36,17 +36,16 @@ final class InvoicePoolSynchronizationTests: XCTestCase {
         try await store.stageInvoicePoolAction(action)
         let (client, session) = try makeClient([.status(403)])
         defer { session.invalidateAndCancel() }
-        // A server denial leaves the return pending and hides its number from available choices.
-        do {
-            try await InvoicePoolSynchronizer(client: client, store: store).synchronizeActions()
-            XCTFail("Permission denial accepted")
-        } catch APIClientError.httpStatus(403) {
-            let status = try await store.invoicePoolStatus()
-            XCTAssertEqual(status.available, 99)
-            XCTAssertEqual(status.pendingCount, 1)
-            XCTAssertFalse(status.reservations.contains { $0.id == item.id })
-        }
-        let model = InvoicePoolViewModel(store: store, client: client, canGenerate: { false }, isAuthorized: { true })
+        // Exercise the sheet's load path so a denial is visible and the return stays pending.
+        let repository = InvoicePoolRepository(store: store, client: client)
+        let model = InvoicePoolViewModel(repository: repository, canGenerate: { false }, isAuthorized: { true })
+        await model.load()
+        XCTAssertEqual(model.issue, "invoicePool.syncError")
+        XCTAssertEqual(model.available, 99)
+        XCTAssertEqual(model.pendingCount, 1)
+        XCTAssertFalse(model.reservations.contains { $0.id == item.id })
+
+        // Generation cannot start while this session lacks the grant and a return is unresolved.
         await model.generateNumbers()
         XCTAssertEqual(PoolProtocol.paths.count, 1)
     }

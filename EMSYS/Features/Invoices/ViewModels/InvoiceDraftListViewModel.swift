@@ -54,8 +54,12 @@ final class InvoiceDraftListViewModel: Identifiable {
 
     var isAvailable: Bool { isAuthorized() }
 
+    /// Opens the reservation pool under the same invoice creation grant.
     func pool() -> InvoicePoolViewModel {
-        InvoicePoolViewModel(store: store, client: client, canGenerate: canGeneratePool, isAuthorized: { self.isAuthorized() && self.financialPermission(.createInvoice) })
+        let repository = InvoicePoolRepository(store: store, client: client)
+        return InvoicePoolViewModel(repository: repository, canGenerate: canGeneratePool) {
+            self.isAuthorized() && self.financialPermission(.createInvoice)
+        }
     }
 
     func editor(draftID: UUID? = nil) -> InvoiceDraftEditorViewModel {

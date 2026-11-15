@@ -19,10 +19,10 @@ final class InvoiceAssignmentPickerViewModel: Identifiable {
     @ObservationIgnored private let canViewBranches: () -> Bool
 
     /// Opens a route or employee picker using grants for that assignment type.
-    init(source: InvoicePickupSource, client: APIClient, store: InvoiceStore,
+    init(source: InvoicePickupSource, repository: InvoiceDraftRepository, store: InvoiceStore,
          isAuthorized: @escaping () -> Bool, canViewBranches: @escaping () -> Bool) {
         self.source = source
-        repository = InvoiceDraftRepository(store: store, client: client)
+        self.repository = repository
         self.store = store
         self.isAuthorized = isAuthorized
         self.canViewBranches = canViewBranches

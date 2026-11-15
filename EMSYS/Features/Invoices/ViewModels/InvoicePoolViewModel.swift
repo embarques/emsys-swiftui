@@ -11,15 +11,13 @@ final class InvoicePoolViewModel: Identifiable {
     private(set) var isLoading = false
     private(set) var issue: String?
     private(set) var pendingCount = 0
-    @ObservationIgnored private let store: InvoiceStore
-    @ObservationIgnored private let client: APIClient?
+    @ObservationIgnored private let repository: InvoicePoolRepository
     @ObservationIgnored private let isAuthorized: () -> Bool
     @ObservationIgnored private let canGenerate: () -> Bool
 
     /// Opens the reservation screen within the current tenant and device scope.
-    init(store: InvoiceStore, client: APIClient?, canGenerate: @escaping () -> Bool, isAuthorized: @escaping () -> Bool) {
-        self.store = store
-        self.client = client
+    init(repository: InvoicePoolRepository, canGenerate: @escaping () -> Bool, isAuthorized: @escaping () -> Bool) {
+        self.repository = repository
         self.canGenerate = canGenerate
         self.isAuthorized = isAuthorized
     }
@@ -32,6 +30,7 @@ final class InvoicePoolViewModel: Identifiable {
 
     /// Restores local numbers and then tries to reconcile the server pool.
     func load() async {
+        // Ignore overlapping loads and avoid reading outside the active session.
         guard isAvailable, !isLoading else {
             return
         }
@@ -41,14 +40,14 @@ final class InvoicePoolViewModel: Identifiable {
         }
         issue = nil
         await loadLocal()
-        guard let client, isAvailable else {
-            return
-        }
         do {
-            let sync = InvoicePoolSynchronizer(client: client, store: store)
-            try await sync.synchronizeActions()
-            try await sync.downloadCurrentPool()
+            // Refresh through the repository after presenting the local snapshot.
+            let didRefresh = try await repository.refresh(isAuthorized: isAuthorized)
+            if !didRefresh {
+                return
+            }
         } catch {
+            // A session that lost access should not receive a stale error.
             if isAvailable {
                 issue = "invoicePool.syncError"
             }
@@ -74,6 +73,7 @@ final class InvoicePoolViewModel: Identifiable {
 
     /// Persists the reservation intent before attempting online synchronization.
     private func perform(_ kind: InvoicePoolAction.Kind, items: [InvoiceReservation] = []) async {
+        // An unresolved action must be reconciled before staging another one.
         guard isAvailable, !isLoading, pendingCount == 0, kind != .generate || canGenerate() else {
             return
         }
@@ -83,17 +83,10 @@ final class InvoicePoolViewModel: Identifiable {
         }
         issue = nil
         do {
-            let deviceID = try await store.invoicePoolDeviceID()
-            let action = InvoicePoolAction(action: kind, deviceID: deviceID, items: items)
-            // Save the intent first so retries resume it with the same request identity.
-            try await store.stageInvoicePoolAction(action)
-            guard let client, isAvailable else {
-                throw APIClientError.invalidResponse
-            }
-            let sync = InvoicePoolSynchronizer(client: client, store: store)
-            try await sync.synchronizeActions()
-            try await sync.downloadCurrentPool()
+            // The repository stages the intent before attempting network work.
+            try await repository.submit(kind, items: items, isAuthorized: isAuthorized)
         } catch {
+            // Publish errors only while the screen still belongs to the session.
             if isAvailable {
                 issue = "invoicePool.syncError"
             }
@@ -103,11 +96,12 @@ final class InvoicePoolViewModel: Identifiable {
 
     /// Presents the available reservations and pending actions from the local snapshot.
     private func loadLocal() async {
+        // A revoked session cannot read the local snapshot.
         guard isAvailable else {
             return
         }
         do {
-            let status = try await store.invoicePoolStatus()
+            let status = try await repository.status()
 
             // Never display numbers from a session that changed during the read.
             guard isAvailable, !Task.isCancelled else {
@@ -118,6 +112,7 @@ final class InvoicePoolViewModel: Identifiable {
             threshold = status.threshold
             pendingCount = status.pendingCount
         } catch {
+            // Publish errors only while the screen still belongs to the session.
             if isAvailable {
                 issue = "invoicePool.loadError"
             }

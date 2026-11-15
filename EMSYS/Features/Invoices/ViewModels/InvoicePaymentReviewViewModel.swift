@@ -18,10 +18,10 @@ final class InvoicePaymentReviewViewModel: Identifiable {
     @ObservationIgnored private let currentBranchID: () -> UInt16?
 
     /// Captures the selected branch and business day for this review.
-    init(day: InvoiceDate = InvoiceDate(date: .now), client: APIClient, store: InvoiceStore,
+    init(day: InvoiceDate = InvoiceDate(date: .now), repository: InvoiceDraftRepository, store: InvoiceStore,
          isAuthorized: @escaping () -> Bool, currentBranchID: @escaping () -> UInt16?) {
         self.day = day
-        self.repository = InvoiceDraftRepository(store: store, client: client)
+        self.repository = repository
         self.store = store
         self.isAuthorized = isAuthorized
         self.currentBranchID = currentBranchID
