@@ -1,6 +1,57 @@
 {
   "sourceLanguage": "es-DO",
   "strings": {
+    "messages.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mensajes"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Messages"
+          }
+        }
+      }
+    },
+    "income.otherIncomeAction": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Otro ingreso"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Other income"
+          }
+        }
+      }
+    },
+    "income.expenseAction": {
+      "extractionState": "manual",
+      "localizations": {
+        "es-DO": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gasto"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Expense"
+          }
+        }
+      }
+    },
     "invoicePayment.method.DEBIT-CARD": {
       "extractionState": "manual",
       "localizations": {
@@ -99,23 +150,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Couldn’t refresh accounts"
-          }
-        }
-      }
-    },
-    "income.add": {
-      "extractionState": "manual",
-      "localizations": {
-        "es-DO": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Agregar movimiento"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Add transaction"
           }
         }
       }

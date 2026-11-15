@@ -86,9 +86,8 @@ struct PickupListView: View {
             Label("pickups.downloaded", systemImage: "internaldrive").font(.caption).foregroundStyle(.secondary)
         }
         if let issue = model?.issue ?? issue {
-            Label(LocalizedStringKey(issue), systemImage: "exclamationmark.triangle")
-                .foregroundStyle(.secondary)
-            Button("auth.retry") { retry() }
+            MessagePanel(message: LocalizedStringKey(issue), icon: "exclamationmark.triangle",
+                         actionTitle: "auth.retry", action: retry)
         }
     }
 

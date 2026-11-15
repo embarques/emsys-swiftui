@@ -31,27 +31,11 @@ struct IncomeView: View {
         Group {
             if let model {
                 IncomeOverviewView(model: model, mayCreate: session.canPrepareIncomeJournal,
-                                   selectedDay: $selectedDay, retry: { await reload(model) })
+                                   selectedDay: $selectedDay, retry: { await reload(model) }) { kind, statement in
+                    entry = Entry(kind: kind, statementID: statement.id)
+                }
                     .task(id: refresh) { await reload(model) }
                     .refreshable { await reload(model) }
-                    .toolbar {
-                        if session.canPrepareIncomeJournal {
-                            Menu {
-                                ForEach(IncomeJournalKind.allCases) { kind in
-                                    Button {
-                                        if let statement = model.period?.statement {
-                                            entry = Entry(kind: kind, statementID: statement.id)
-                                        }
-                                    } label: {
-                                        Label(LocalizedStringKey(kind.entryTitle), systemImage: kind.icon)
-                                    }
-                                }
-                            } label: {
-                                Label("income.add", systemImage: "plus.circle.fill")
-                            }
-                            .disabled(!model.canCreate)
-                        }
-                    }
                     .sheet(item: $entry) { entry in
                         IncomeEntryView(model: model, kind: entry.kind, statementID: entry.statementID) {
                             synchronization.requestUpload()
@@ -100,6 +84,9 @@ struct IncomeOverviewView: View {
     let mayCreate: Bool
     @Binding var selectedDay: InvoiceDate?
     let retry: () async -> Void
+    let openEntry: (IncomeJournalKind, InvoiceIncomeStatement) -> Void
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @State private var attemptedEntry = false
     @State private var showsDatePicker = false
 
     var body: some View {
@@ -108,18 +95,20 @@ struct IncomeOverviewView: View {
                 summary(model)
                     .listRowBackground(AppStyle.Colors.accent.opacity(0.09))
             }
-            if model.isShowingDownloaded {
+            if let issue = model.issue {
+                MessagePanel(message: LocalizedStringKey(issue), icon: "exclamationmark.triangle",
+                             actionTitle: "auth.retry", action: { Task { await retry() } })
+                    .listRowBackground(Color.clear)
+            } else if attemptedEntry && mayCreate && !model.canCreate {
+                MessagePanel(message: "income.openPeriodRequired", icon: "calendar.badge.exclamationmark")
+                    .listRowBackground(Color.clear)
+            }
+            if mayCreate {
+                entryTiles.listRowBackground(Color.clear)
+            }
+            if model.isShowingDownloaded && !model.isLoading {
                 Label("income.downloaded", systemImage: "internaldrive")
                     .font(.caption).foregroundStyle(.secondary)
-            }
-            if let issue = model.issue {
-                Button { Task { await retry() } } label: {
-                    Label(LocalizedStringKey(issue), systemImage: "arrow.clockwise")
-                }
-            }
-            if mayCreate, !model.isLoading, !model.canCreate {
-                Label("income.openPeriodRequired", systemImage: "calendar.badge.exclamationmark")
-                    .font(.footnote).foregroundStyle(.secondary)
             }
             if model.isLoading && model.period == nil {
                 ProgressView().frame(maxWidth: .infinity)
@@ -150,6 +139,10 @@ struct IncomeOverviewView: View {
                 ContentUnavailableView("income.empty", systemImage: "tray")
             }
         }
+        .onChange(of: model.canCreate) {
+            if model.canCreate { attemptedEntry = false }
+        }
+        .onChange(of: selectedDay) { attemptedEntry = false }
         .sheet(isPresented: $showsDatePicker) {
             NavigationStack {
                 DatePicker("drafts.date", selection: Binding(
@@ -175,6 +168,42 @@ struct IncomeOverviewView: View {
             #if os(macOS)
             .frame(minWidth: 380, minHeight: 400)
             #endif
+        }
+    }
+
+    private var entryTiles: some View {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(spacing: 10)) : AnyLayout(HStackLayout(spacing: 10))
+        return layout {
+            ForEach(IncomeJournalKind.allCases) { kind in
+                Button {
+                    if model.canCreate, let statement = model.period?.statement {
+                        openEntry(kind, statement)
+                    } else {
+                        attemptedEntry = true
+                    }
+                } label: {
+                    VStack(spacing: 8) {
+                        Image(systemName: kind == .sale ? "arrow.down.left.circle" : "arrow.up.right.circle")
+                            .font(.title2)
+                            .foregroundStyle(AppStyle.Colors.accent)
+                            .accessibilityHidden(true)
+                        Text(LocalizedStringKey(kind == .sale ? "income.otherIncomeAction" : "income.expenseAction"))
+                            .font(.subheadline.weight(.semibold))
+                            .multilineTextAlignment(.center)
+                    }
+                    .padding(10)
+                    .frame(maxWidth: .infinity, minHeight: 76)
+                    .background(AppStyle.Colors.accent.opacity(0.07), in: .rect(cornerRadius: 12))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 12)
+                            .strokeBorder(AppStyle.Colors.accent.opacity(0.22))
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(model.isLoading && model.period == nil)
+            }
         }
     }
 

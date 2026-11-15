@@ -42,12 +42,8 @@ struct InvoiceDirectoryView: View {
                         .font(.caption).foregroundStyle(.secondary).padding(.bottom, 12)
                 }
                 if let issue {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(LocalizedStringKey(issue)).font(.callout)
-                        Button("auth.retry") { Task { await retry() } }.buttonStyle(.bordered)
-                    }
-                    .padding().frame(maxWidth: .infinity, alignment: .leading)
-                    .background(AppStyle.Colors.surface, in: RoundedRectangle(cornerRadius: 12))
+                    MessagePanel(message: LocalizedStringKey(issue), icon: "exclamationmark.triangle",
+                                 actionTitle: "auth.retry", action: { Task { await retry() } })
                     .padding(.bottom, 12)
                 }
                 if !localEntries.isEmpty {

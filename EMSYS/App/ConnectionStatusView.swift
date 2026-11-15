@@ -25,10 +25,30 @@ private struct ConnectionStatusModifier: ViewModifier {
                     }
                 }
             }
-            .alert("sync.warning", isPresented: $showsWarning) {
-                Button("documents.close", role: .cancel) { }
-            } message: {
-                Text(synchronization.requiresReview ? "sync.reviewRequired" : "sync.failed")
+            .sheet(isPresented: $showsWarning) {
+                NavigationStack {
+                    ScrollView {
+                        if synchronization.failed, !synchronization.isRunning {
+                            MessagePanel(message: synchronization.requiresReview ? "sync.reviewRequired" : "sync.failed",
+                                         icon: "exclamationmark.triangle")
+                                .padding()
+                        }
+                    }
+                    .navigationTitle("sync.warning")
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("documents.close") { showsWarning = false }
+                        }
+                    }
+                }
+                #if os(iOS)
+                .presentationDetents([.medium, .large])
+                #else
+                .frame(minWidth: 380, minHeight: 200)
+                #endif
+            }
+            .onChange(of: synchronization.failed) {
+                if !synchronization.failed { showsWarning = false }
             }
     }
 }

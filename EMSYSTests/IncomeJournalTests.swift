@@ -181,7 +181,7 @@ final class IncomeJournalTests: XCTestCase {
         window.frame = scene.effectiveGeometry.coordinateSpace.bounds
         defer { window.isHidden = true; previous?.makeKey() }
         let overview = UIHostingController(rootView: NavigationStack {
-            IncomeOverviewView(model: model, mayCreate: true, selectedDay: .constant(nil), retry: {})
+            IncomeOverviewView(model: model, mayCreate: true, selectedDay: .constant(nil), retry: {}, openEntry: { _, _ in })
                 .navigationTitle("navigation.dailyIncome")
         }.environment(\.locale, Locale(identifier: "es-DO")))
         window.overrideUserInterfaceStyle = .light
