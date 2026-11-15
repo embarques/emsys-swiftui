@@ -60,67 +60,10 @@ struct AppRootView: View {
         )
     }
 
+    /// Requests a synchronization run while this window remains active and connected.
     private func synchronize(includesDownloads: Bool = true) async {
-        guard canSynchronize, connection.status != .unavailable, scenePhase == .active else { return }
-        let sessionID = session.contextID
-        synchronization.useSession(sessionID)
-        let requestedUploadVersion = synchronization.requestedUploadVersion
-        let previousSuccess = synchronization.lastSucceededAt
-        let previousDownload = synchronization.lastDownloadedAt
-        while true {
-            if synchronization.isRunning { await synchronization.waitForCurrentRun() }
-            guard !Task.isCancelled, session.contextID == sessionID, canSynchronize,
-                  connection.status != .unavailable, scenePhase == .active else { return }
-            let fulfilled = includesDownloads
-                ? synchronization.lastDownloadedAt != previousDownload
-                : synchronization.lastSucceededAt != previousSuccess
-            if fulfilled,
-               synchronization.completedUploadVersion >= requestedUploadVersion { return }
-            let started = await synchronization.synchronize(includesDownloads: includesDownloads) {
-                var failure: Error?
-                do {
-                    if session.canViewInvoices {
-                        let access = try await session.invoiceAccess()
-                        if includesDownloads {
-                            try await InvoiceSynchronizer(client: access.client, store: access.store).synchronize()
-                        } else {
-                            try await InvoiceMutationUploader(client: access.client, store: access.store).synchronize()
-                        }
-                    } else if session.canCreateAssignedPickupInvoices {
-                        let access = try await session.invoiceAccess(allowAssignedCreation: true)
-                        try await InvoiceCreationUploader(client: access.client, store: access.store, assignedOnly: true).synchronize()
-                    }
-                } catch is CancellationError { throw CancellationError() }
-                catch { failure = error }
-                guard session.contextID == sessionID else { throw APIClientError.sessionChanged }
-                do {
-                    if session.canViewPickups && session.canUpdatePickups {
-                        let access = try await session.pickupAccess()
-                        try await PickupCompletionUploader(client: access.client, store: access.store,
-                            isAuthorized: { session.contextID == sessionID && session.canUpdatePickups }).synchronize()
-                    }
-                } catch is CancellationError { throw CancellationError() }
-                catch { failure = failure ?? error }
-                do {
-                    if includesDownloads, session.canCreateAssignedPickupInvoices {
-                        let access = try await session.invoiceAccess(allowAssignedCreation: true)
-                        try await AssignedInvoicePreparation(client: access.client, store: access.store,
-                            isAuthorized: { session.contextID == sessionID && session.canCreateAssignedPickupInvoices }).download()
-                    }
-                } catch is CancellationError { throw CancellationError() }
-                catch { failure = failure ?? error }
-                do {
-                    if session.canPostIncomeJournal, let branchID = session.user?.branch?.id {
-                        let access = try await session.incomeAccess()
-                        try await IncomeJournalService(client: access.client, store: access.store).upload(branchID: branchID,
-                            isAuthorized: { session.contextID == sessionID && session.canPostIncomeJournal })
-                    }
-                } catch is CancellationError { throw CancellationError() }
-                catch { failure = failure ?? error }
-                if let failure { throw failure }
-
-            }
-            if started { return }
+        await synchronization.run(for: session, includesDownloads: includesDownloads) {
+            canSynchronize && connection.status != .unavailable && scenePhase == .active
         }
     }
 

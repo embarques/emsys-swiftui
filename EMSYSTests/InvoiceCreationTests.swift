@@ -36,7 +36,7 @@ final class InvoiceCreationTests: XCTestCase {
         let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = try await InvoiceStore.open(directory: directory, userID: "user", companyID: "company")
-        let model = InvoiceDraftEditorModel(store: store, isAuthorized: { true })
+        let model = InvoiceDraftEditorViewModel(store: store, isAuthorized: { true })
         let first = InvoiceDraft.Item(name: "First box", quantity: "2", unitPrice: "10")
         let second = InvoiceDraft.Item(name: "Second box", quantity: "unfinished", unitPrice: "5")
         model.content.items = [first, second]
@@ -69,12 +69,12 @@ final class InvoiceCreationTests: XCTestCase {
             XCTFail("Offline selection must not request credentials")
             throw APIClientError.missingCredentials
         }
-        let model = InvoiceDraftEditorModel(store: store, client: client,
+        let model = InvoiceDraftEditorViewModel(store: store, client: client,
             canViewAssignments: { _ in true }, isAuthorized: { true })
         await model.loadPaymentLocations(online: false)
         XCTAssertEqual(model.paymentLocations.compactMap(\.code), ["NY", "RD"])
         XCTAssertNil(model.content.paymentReview)
-        let denied = InvoiceDraftEditorModel(store: store, client: client, isAuthorized: { true })
+        let denied = InvoiceDraftEditorViewModel(store: store, client: client, isAuthorized: { true })
         await denied.loadPaymentLocations(online: false)
         XCTAssertTrue(denied.paymentLocations.isEmpty)
     }
@@ -83,7 +83,7 @@ final class InvoiceCreationTests: XCTestCase {
         let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = try await InvoiceStore.open(directory: directory, userID: "user", companyID: "company")
-        let model = InvoiceDraftEditorModel(store: store, isAuthorized: { true })
+        let model = InvoiceDraftEditorViewModel(store: store, isAuthorized: { true })
         model.continueCreation()
         XCTAssertEqual(model.step, .customers)
         XCTAssertNil(model.stepIssue)
@@ -101,7 +101,7 @@ final class InvoiceCreationTests: XCTestCase {
         XCTAssertNil(model.stepIssue)
         await model.save()
         let drafts = try await store.draftSummaries()
-        let restored = InvoiceDraftEditorModel(draftID: try XCTUnwrap(drafts.first?.id), store: store, isAuthorized: { true })
+        let restored = InvoiceDraftEditorViewModel(draftID: try XCTUnwrap(drafts.first?.id), store: store, isAuthorized: { true })
         await restored.load()
         XCTAssertEqual(restored.step, .items)
         XCTAssertEqual(restored.content.items, model.content.items)

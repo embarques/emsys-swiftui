@@ -121,7 +121,7 @@ final class InvoiceLocalPrintingTests: XCTestCase {
         let client = try APIClient(baseURL: XCTUnwrap(URL(string: "https://api.example.test/v1")), session: session) { _ in
             APICredentials(sessionID: identity, userID: "user", companyID: "company", idToken: "fixture")
         }
-        let model = InvoiceListModel(client: client, store: store)
+        let model = InvoiceListViewModel(client: client, store: store)
         let presenter = Task { @MainActor in
             withUnsafeCurrentTask { $0?.cancel() }
             model.preparePrinting()
@@ -157,8 +157,8 @@ final class InvoiceLocalPrintingTests: XCTestCase {
             }
             throw URLError(.notConnectedToInternet)
         }
-        let directoryModel = InvoiceListModel(client: client, store: store)
-        let detailModel = InvoiceDetailModel(invoice: invoice, client: client, store: store)
+        let directoryModel = InvoiceListViewModel(client: client, store: store)
+        let detailModel = InvoiceDetailViewModel(invoice: invoice, client: client, store: store)
         let detailPreparation: Task<Void, Never>?
         if fromDetail {
             detailPreparation = Task { await detailModel.preparePrinting() }
@@ -208,7 +208,7 @@ final class InvoiceLocalPrintingTests: XCTestCase {
     }
 
     func testAuthorizationPreventsStartingLocalPrint() async {
-        let printer = InvoicePreviewModel()
+        let printer = InvoicePreviewViewModel()
         var called = false
         printer.generate(isAuthorized: { false }) {
             called = true

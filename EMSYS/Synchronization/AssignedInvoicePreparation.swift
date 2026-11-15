@@ -7,23 +7,33 @@ struct AssignedInvoicePreparation {
     let store: InvoiceStore
     let isAuthorized: () -> Bool
 
+    /// Downloads the full item catalog and policies needed for assigned pickup invoices.
     func download() async throws {
+        // Validate all pages before replacing the offline catalog.
         var catalog: [InvoiceCatalogItem] = []
         var identities = Set<UInt16>()
         for page in 1...26 {
-            guard isAuthorized() else { throw APIClientError.sessionChanged }
+            guard isAuthorized() else {
+                throw APIClientError.sessionChanged
+            }
             let batch = try await client.get("invoice-descriptions", queryItems: [
                 URLQueryItem(name: "page", value: String(page)), URLQueryItem(name: "limit", value: "40"),
                 URLQueryItem(name: "sort", value: "createdAt:desc,id:desc")
             ], as: [InvoiceCatalogItem]?.self) ?? []
-            guard isAuthorized() else { throw APIClientError.sessionChanged }
+            guard isAuthorized() else {
+                throw APIClientError.sessionChanged
+            }
             guard batch.count <= 40, catalog.count + batch.count <= 1_000,
-                  batch.allSatisfy({ $0.isValid && identities.insert($0.id).inserted }) else { throw APIClientError.invalidResponse }
-            catalog += batch
+                  batch.allSatisfy({ $0.isValid && identities.insert($0.id).inserted }) else {
+                throw APIClientError.invalidResponse
+            }
+            catalog.append(contentsOf: batch)
             if batch.count < 40 {
                 try await store.saveItemCatalog(catalog)
                 let policies = try await InvoicePolicyDownloader(client: client).download(isAuthorized: isAuthorized)
-                guard isAuthorized() else { throw APIClientError.sessionChanged }
+                guard isAuthorized() else {
+                    throw APIClientError.sessionChanged
+                }
                 try await store.savePolicies(policies)
                 return
             }

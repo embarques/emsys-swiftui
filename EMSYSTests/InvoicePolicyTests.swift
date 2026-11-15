@@ -23,7 +23,7 @@ final class InvoicePolicyTests: XCTestCase {
         let previous = [policy(99)]
         try await store.savePolicies(previous)
         let first = (1...40).map { policy(Int64($0)) }
-        let editor = InvoiceDraftEditorModel(store: store, client: try makeClient(), canReviewPolicies: { true }, isAuthorized: { true })
+        let editor = InvoiceDraftEditorViewModel(store: store, client: try makeClient(), canReviewPolicies: { true }, isAuthorized: { true })
         PolicyDownloadProtocol.responses = [(200, try envelope(first)), (500, Data())]
         await editor.loadPolicies(online: true)
         XCTAssertEqual(editor.content.policies, previous)
@@ -44,7 +44,7 @@ final class InvoicePolicyTests: XCTestCase {
         let store = try await InvoiceStore.open(directory: directory, userID: "user", companyID: "company")
         let unknown = try await store.policies()
         XCTAssertNil(unknown)
-        let editor = InvoiceDraftEditorModel(store: store, client: try makeClient(), canReviewPolicies: { true }, isAuthorized: { true })
+        let editor = InvoiceDraftEditorViewModel(store: store, client: try makeClient(), canReviewPolicies: { true }, isAuthorized: { true })
         await editor.loadPolicies(online: false)
         XCTAssertNil(editor.content.policies)
         XCTAssertEqual(editor.policyIssue, "policies.unavailable")
@@ -77,7 +77,7 @@ final class InvoicePolicyTests: XCTestCase {
         } catch InvoiceStore.StoreError.invalidDraft { }
         let restored = try await store.draft(id: saved.id)
         XCTAssertEqual(restored?.content, saved.content)
-        let editor = InvoiceDraftEditorModel(draftID: saved.id, store: store, client: try makeClient(), canReviewPolicies: { true }, isAuthorized: { true })
+        let editor = InvoiceDraftEditorViewModel(draftID: saved.id, store: store, client: try makeClient(), canReviewPolicies: { true }, isAuthorized: { true })
         await editor.load()
         await editor.loadPolicies(online: false)
         XCTAssertEqual(editor.content.policies, saved.content.policies)
@@ -89,7 +89,7 @@ final class InvoicePolicyTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = try await InvoiceStore.open(directory: directory, userID: "user", companyID: "company")
         try await store.savePolicies([policy(1)])
-        let editor = InvoiceDraftEditorModel(store: store, client: try makeClient(), canReviewPolicies: { false }, isAuthorized: { true })
+        let editor = InvoiceDraftEditorViewModel(store: store, client: try makeClient(), canReviewPolicies: { false }, isAuthorized: { true })
         await editor.loadPolicies(online: true)
         XCTAssertNil(editor.content.policies)
         XCTAssertFalse(editor.canLoadPolicies)

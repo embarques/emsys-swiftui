@@ -16,7 +16,7 @@ final class InvoiceDraftPaymentTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = try await InvoiceStore.open(directory: directory, userID: "user", companyID: "company")
         var authorized = true
-        let model = InvoiceDraftEditorModel(store: store, financialPermission: { _ in authorized }, isAuthorized: { true })
+        let model = InvoiceDraftEditorViewModel(store: store, financialPermission: { _ in authorized }, isAuthorized: { true })
         model.setPaymentMode(.record)
         model.setPaymentMethod(.check)
         model.content.payment?.amount = "12.50"
@@ -108,7 +108,7 @@ final class InvoiceDraftPaymentTests: XCTestCase {
         let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = try await InvoiceStore.open(directory: directory, userID: "user", companyID: "company")
-        let list = InvoiceDraftListModel(store: store, defaultPaymentRegion: "NY",
+        let list = InvoiceDraftListViewModel(store: store, defaultPaymentRegion: "NY",
             financialPermission: { $0 == .recordPayment }, isAuthorized: { true })
         let new = list.editor()
         XCTAssertEqual(new.content.payment?.mode, .record)
@@ -142,13 +142,13 @@ final class InvoiceDraftPaymentTests: XCTestCase {
         let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = try await InvoiceStore.open(directory: directory, userID: "user", companyID: "company")
-        let denied = InvoiceDraftEditorModel(store: store, isAuthorized: { true })
+        let denied = InvoiceDraftEditorViewModel(store: store, isAuthorized: { true })
         denied.setPaymentMode(.record)
         XCTAssertEqual(denied.content.payment?.mode, .skip)
         XCTAssertNil(denied.content.payment?.method)
         denied.setPaymentMode(.skip)
         XCTAssertEqual(denied.content.payment?.mode, .skip)
-        let model = InvoiceDraftEditorModel(store: store, financialPermission: { permission in
+        let model = InvoiceDraftEditorViewModel(store: store, financialPermission: { permission in
             switch permission { case .recordPayment: true; default: false }
         }, isAuthorized: { true })
         model.content.items = [.init(name: "Box", unitPrice: "20")]

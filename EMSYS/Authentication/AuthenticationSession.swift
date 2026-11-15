@@ -37,128 +37,49 @@ final class AuthenticationSession {
 
     @ObservationIgnored private let configurationProvider: () -> FirebaseOptions?
 
+    /// Uses the installed Firebase configuration unless a fixture supplies one.
     init(configurationProvider: (() -> FirebaseOptions?)? = nil) {
         self.configurationProvider = configurationProvider ?? {
-            guard let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") else { return nil }
+            guard let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") else {
+                return nil
+            }
             return FirebaseOptions(contentsOfFile: path)
         }
     }
 
+    /// Checks whether the Firebase session can be ended from the current screen.
     var canSignOut: Bool { auth != nil }
 
+    /// Identifies the session that owns the current feature stores and requests.
     var contextID: UUID { generation }
 
-    var canViewInvoices: Bool {
-        phase == .signedIn && permissions?.contains("canViewInvoice", resourceType: "invoice") == true
-    }
-
-    var canViewPickups: Bool {
-        phase == .signedIn && AppDestination.pickups.isAccessible(with: permissions)
-    }
-
-    var canUpdatePickups: Bool {
-        canViewPickups && ["canUpdatePickup", "canUpdateAssignedAppointments"].contains {
-            permissions?.contains($0, resourceType: "pickup") == true
-        }
-    }
-
-    func pickupAccess() async throws -> (client: APIClient, store: PickupStore) {
-        guard canViewPickups, let apiBaseURL, let userID = auth?.currentUser?.uid, let companyID else {
+    /// Creates a session-scoped store and a client that rechecks authorization for each request.
+    func openFeatureStorage<Store: Sendable>(
+        _ path: String,
+        permits: @escaping (AuthenticationSession) -> Bool,
+        openStore: (URL, String, String, String) async throws -> Store
+    ) async throws -> (client: APIClient, store: Store) {
+        // Capture the account and company before any asynchronous storage work.
+        guard permits(self), let apiBaseURL, let userID = auth?.currentUser?.uid, let companyID else {
             throw AuthenticationIssue.authorization
         }
-        let sessionID = generation
-        guard let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
-            throw AuthenticationIssue.configuration
-        }
-        let store = try await PickupStore.open(directory: directory.appending(path: "EMSYS/Pickups", directoryHint: .isDirectory),
-            userID: userID, companyID: companyID, apiEnvironment: apiBaseURL.absoluteString)
-        guard generation == sessionID, canViewPickups else { throw APIClientError.sessionChanged }
-        let client = try APIClient(baseURL: apiBaseURL) { [weak self] forceRefresh in
-            guard let self, self.generation == sessionID, self.canViewPickups else { throw APIClientError.sessionChanged }
-            return try await self.credentials(forceRefresh: forceRefresh)
-        }
-        return (client, store)
-    }
-
-    var canViewIncome: Bool {
-        phase == .signedIn && AppDestination.dailyIncome.isAccessible(with: permissions)
-    }
-
-    var canPostIncomeJournal: Bool {
-        canViewIncome && permissions?.contains("canCreateJournal", resourceType: "journal") == true
-    }
-
-    var canPrepareIncomeJournal: Bool {
-        canPostIncomeJournal && permissions?.contains("canViewChartAccount", resourceType: "chart_account") == true
-    }
-
-    func incomeAccess() async throws -> (client: APIClient, store: IncomeStore) {
-        guard canViewIncome, let apiBaseURL, let userID = auth?.currentUser?.uid, let companyID else {
-            throw AuthenticationIssue.authorization
-        }
-        let sessionID = generation
-        guard let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
-            throw AuthenticationIssue.configuration
-        }
-        let store = try await IncomeStore.open(directory: directory.appending(path: "EMSYS/Income", directoryHint: .isDirectory),
-            userID: userID, companyID: companyID, apiEnvironment: apiBaseURL.absoluteString)
-        guard generation == sessionID, canViewIncome else { throw APIClientError.sessionChanged }
-        let client = try APIClient(baseURL: apiBaseURL) { [weak self] forceRefresh in
-            guard let self, self.generation == sessionID, self.canViewIncome else { throw APIClientError.sessionChanged }
-            return try await self.credentials(forceRefresh: forceRefresh)
-        }
-        return (client, store)
-    }
-
-    var canCreateInvoices: Bool {
-        canViewInvoices && permissions?.contains("canCreateInvoice", resourceType: "invoice") == true
-    }
-
-    var canCreateAssignedPickupInvoices: Bool {
-        phase == .signedIn && canViewPickups && permissions?.contains("canCreateAssignedInvoice", resourceType: "invoice") == true
-    }
-
-    var canCreatePickupInvoices: Bool { canCreateInvoices || canCreateAssignedPickupInvoices }
-
-    var canPrintInvoices: Bool {
-        canViewInvoices && permissions?.contains("canPrintInvoice", resourceType: "invoice") == true
-    }
-
-    var canViewCustomers: Bool {
-        phase == .signedIn && permissions?.contains("canViewCustomer", resourceType: "customer") == true
-    }
-
-    var canViewContainers: Bool {
-        phase == .signedIn && permissions?.contains("canViewContainer", resourceType: "container") == true
-    }
-
-    var canReviewInvoicePolicies: Bool {
-        phase == .signedIn && (permissions?.contains("canCreateInvoice", resourceType: "invoice") == true
-            || permissions?.contains("canViewInvoicePolicy", resourceType: "invoice_policy") == true)
-    }
-
-    var canUpdateInvoices: Bool {
-        canViewInvoices && permissions?.contains("canUpdateInvoice", resourceType: "invoice") == true
-    }
-
-    func invoiceAccess(allowAssignedCreation: Bool = false) async throws -> (client: APIClient, store: InvoiceStore) {
-        guard (canViewInvoices || allowAssignedCreation && canCreateAssignedPickupInvoices), let apiBaseURL,
-              let userID = auth?.currentUser?.uid, let companyID else {
-            throw AuthenticationIssue.authorization
-        }
-        // Opening already-authorized local records must not require a token
-        // refresh. The API client obtains fresh credentials only for requests.
         let sessionID = generation
         guard let supportDirectory = FileManager.default.urls(
             for: .applicationSupportDirectory, in: .userDomainMask
-        ).first else { throw AuthenticationIssue.configuration }
-        let store = try await InvoiceStore.open(
-            directory: supportDirectory.appending(path: "EMSYS/Invoices", directoryHint: .isDirectory),
-            userID: userID, companyID: companyID, apiEnvironment: apiBaseURL.absoluteString
-        )
-        guard sessionID == generation, (canViewInvoices || allowAssignedCreation && canCreateAssignedPickupInvoices) else { throw APIClientError.sessionChanged }
+        ).first else {
+            throw AuthenticationIssue.configuration
+        }
+
+        // Locally authorized work can open offline. Token refresh is deferred until a request.
+        let directory = supportDirectory.appending(path: path, directoryHint: .isDirectory)
+        let store = try await openStore(directory, userID, companyID, apiBaseURL.absoluteString)
+        guard generation == sessionID, permits(self) else {
+            throw APIClientError.sessionChanged
+        }
+
+        // Prevent an existing client from sending requests after the account or grant changes.
         let client = try APIClient(baseURL: apiBaseURL) { [weak self] forceRefresh in
-            guard let self, (self.canViewInvoices || allowAssignedCreation && self.canCreateAssignedPickupInvoices), self.generation == sessionID else {
+            guard let self, self.generation == sessionID, permits(self) else {
                 throw APIClientError.sessionChanged
             }
             return try await self.credentials(forceRefresh: forceRefresh)
@@ -168,12 +89,16 @@ final class AuthenticationSession {
 
     // The existing portal's configured API root. No browser proxy is needed by
     // native clients. A separate environment can supply EMSYSAPIBaseURL in Info.
+    /// Returns the configured root for the EMSYS API.
     private var apiBaseURL: URL? {
         APIConfiguration.baseURL
     }
 
+    /// Validates configuration and starts observing the SDK session.
     func start() {
-        guard auth == nil else { return }
+        guard auth == nil else {
+            return
+        }
         configurationIssue = nil
         didRecheckConfiguration = false
         guard let options = configurationProvider() else {
@@ -221,12 +146,17 @@ final class AuthenticationSession {
         }
     }
 
+    /// Signs in through the SDK and lets its observer load tenant authorization.
     func signIn(email: String, password: String) async {
-        guard let auth, !isSigningIn else { return }
+        guard let auth, !isSigningIn else {
+            return
+        }
         issue = nil
         isSigningIn = true
         refreshPermissionsOnRestore = true
-        defer { isSigningIn = false }
+        defer {
+            isSigningIn = false
+        }
         do {
             _ = try await auth.signIn(
                 withEmail: email.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -239,6 +169,7 @@ final class AuthenticationSession {
         }
     }
 
+    /// Rechecks missing configuration or restores the current account.
     func retry() {
         guard let auth else {
             start()
@@ -248,18 +179,31 @@ final class AuthenticationSession {
         restore(auth.currentUser)
     }
 
+    /// Refreshes authorization while preserving an unchanged verified session.
     func syncPermissions() async {
-        guard phase == .signedIn, let auth, !isSyncingPermissions else { return }
+        guard phase == .signedIn, let auth, !isSyncingPermissions else {
+            return
+        }
         let context = generation
         isSyncingPermissions = true
         permissionsSyncIssue = nil
-        defer { if generation == context { isSyncingPermissions = false } }
+        defer {
+            // A completed refresh cannot clear a newer session's loading state.
+            if generation == context {
+                isSyncingPermissions = false
+            }
+        }
         restore(auth.currentUser, preservingAuthorizedContext: true, refreshPermissions: true)
         await restoration?.value
-        guard generation == context, phase == .signedIn else { return }
-        if issue != nil { permissionsSyncIssue = "permissions.syncError" }
+        guard generation == context, phase == .signedIn else {
+            return
+        }
+        if issue != nil {
+            permissionsSyncIssue = "permissions.syncError"
+        }
     }
 
+    /// Revokes local access and removes the stored authorization before SDK sign-out.
     func signOut() {
         guard let auth else {
             phase = .unavailable
@@ -275,14 +219,20 @@ final class AuthenticationSession {
         phase = .restoring
         restoration = Task {
             do {
-                if let userID { try await authorizedSessions?.remove(userID: userID) }
+                if let userID {
+                    try await authorizedSessions?.remove(userID: userID)
+                }
                 try Task.checkCancellation()
-                guard generation == requestGeneration else { return }
+                guard generation == requestGeneration else {
+                    return
+                }
                 try auth.signOut()
                 phase = .signedOut
                 issue = nil
             } catch {
-                guard generation == requestGeneration else { return }
+                guard generation == requestGeneration else {
+                    return
+                }
                 // Hide business content and allow retry if secure deletion fails.
                 phase = .unavailable
                 issue = .signOut
@@ -290,6 +240,7 @@ final class AuthenticationSession {
         }
     }
 
+    /// Returns an API token for the unchanged user and tenant scope.
     func credentials(forceRefresh: Bool) async throws -> APICredentials {
         guard let auth, let firebaseUser = auth.currentUser, let companyID else {
             throw APIClientError.missingCredentials
@@ -309,7 +260,9 @@ final class AuthenticationSession {
             do {
                 try await authorizedSessions?.remove(userID: firebaseUser.uid)
             } catch {
-                guard generation == requestGeneration else { throw APIClientError.sessionChanged }
+                guard generation == requestGeneration else {
+                    throw APIClientError.sessionChanged
+                }
                 do {
                     try auth.signOut()
                 } catch {
@@ -324,11 +277,17 @@ final class AuthenticationSession {
         )
     }
 
+    /// Restores the signed-in account using fresh authorization or its verified offline snapshot.
     private func restore(_ firebaseUser: FirebaseAuth.User?, preservingAuthorizedContext: Bool = false,
                          refreshPermissions: Bool = false) {
-        guard auth?.currentUser?.uid == firebaseUser?.uid else { return }
+        guard auth?.currentUser?.uid == firebaseUser?.uid else {
+            return
+        }
         let mustRefresh = refreshPermissions || refreshPermissionsOnRestore
-        if phase == .signedIn, user?.uid == firebaseUser?.uid, !mustRefresh { return }
+        if phase == .signedIn, user?.uid == firebaseUser?.uid, !mustRefresh {
+            return
+        }
+        // Retain the open session only while refreshing the same known tenant and user.
         let keepsContext = preservingAuthorizedContext && phase == .signedIn
             && user?.uid == firebaseUser?.uid && companyID != nil
         let previousCompanyID = companyID
@@ -338,13 +297,22 @@ final class AuthenticationSession {
             clearAuthorization()
         }
         issue = nil
-        guard let firebaseUser else { phase = .signedOut; return }
-        if !keepsContext { phase = .restoring }
+        guard let firebaseUser else {
+            phase = .signedOut
+            return
+        }
+        if !keepsContext {
+            phase = .restoring
+        }
         let requestGeneration = generation
         restoration = Task { [weak self] in
-            guard let self else { return }
+            guard let self else {
+                return
+            }
             do {
-                guard let authorizedSessions else { throw AuthenticationIssue.configuration }
+                guard let authorizedSessions else {
+                    throw AuthenticationIssue.configuration
+                }
                 let loaded = try await AuthorizedSessionLoader.load(userID: firebaseUser.uid,
                     companyID: keepsContext ? previousCompanyID : nil, refreshPermissions: mustRefresh,
                     cached: { try await authorizedSessions.load(userID: firebaseUser.uid, companyID: previousCompanyID) },
@@ -353,18 +321,25 @@ final class AuthenticationSession {
                             keepsContext: keepsContext, previousCompanyID: previousCompanyID)
                     })
                 try Task.checkCancellation()
-                guard generation == requestGeneration, auth?.currentUser?.uid == firebaseUser.uid else { return }
+                guard generation == requestGeneration, auth?.currentUser?.uid == firebaseUser.uid else {
+                    return
+                }
+                // Publish the verified snapshot only after the account is confirmed unchanged.
                 companyID = loaded.snapshot.companyID
                 user = loaded.snapshot.user
                 permissions = loaded.snapshot.permissions
                 permissionsSyncedAt = loaded.snapshot.permissionsSyncedAt
                 isRestoredOffline = loaded.usedCache
-                if !loaded.usedCache { refreshPermissionsOnRestore = false }
+                if !loaded.usedCache {
+                    refreshPermissionsOnRestore = false
+                }
                 phase = .signedIn
             } catch is CancellationError {
                 return
             } catch {
-                guard generation == requestGeneration, !Task.isCancelled else { return }
+                guard generation == requestGeneration, !Task.isCancelled else {
+                    return
+                }
                 if keepsContext, !Self.invalidatesAuthorization(error), companyID == previousCompanyID {
                     // A failed manual refresh preserves the last verified grants
                     // and any open work unless authorization was revoked.
@@ -396,7 +371,9 @@ final class AuthenticationSession {
                     } catch {
                         // Also end the SDK session if a revoked context cannot
                         // be removed, so it cannot be restored as offline access.
-                        guard generation == requestGeneration else { return }
+                        guard generation == requestGeneration else {
+                            return
+                        }
                         do {
                             try auth?.signOut()
                         } catch {
@@ -407,7 +384,9 @@ final class AuthenticationSession {
                         }
                     }
                 }
-                guard generation == requestGeneration else { return }
+                guard generation == requestGeneration else {
+                    return
+                }
                 clearAuthorization()
                 phase = .unavailable
                 if let knownIssue = error as? AuthenticationIssue {
@@ -422,12 +401,16 @@ final class AuthenticationSession {
         }
     }
 
+    /// Downloads the current tenant and grants, then saves their verified snapshot.
     private func refreshedAuthorization(for firebaseUser: FirebaseAuth.User, requestGeneration: UUID,
                                         keepsContext: Bool, previousCompanyID: String?) async throws -> AuthorizedSessionSnapshot {
         let token = try await firebaseUser.getIDTokenResult(forcingRefresh: true)
+        // The SDK claim takes precedence over the optional tenant profile.
         var resolvedCompany = Self.nonempty(token.claims["companyId"] as? String)
         if resolvedCompany == nil {
-            guard let profileDatabase else { throw AuthenticationIssue.configuration }
+            guard let profileDatabase else {
+                throw AuthenticationIssue.configuration
+            }
             let company = try await CompanyProfileLookup.read { completion in
                 profileDatabase.collection("users").document(firebaseUser.uid)
                     .getDocument(source: .server) { snapshot, error in
@@ -437,13 +420,23 @@ final class AuthenticationSession {
             resolvedCompany = Self.nonempty(company)
         }
         try Task.checkCancellation()
-        guard generation == requestGeneration else { throw APIClientError.sessionChanged }
-        guard let resolvedCompany else { throw AuthenticationIssue.company }
-        if keepsContext && resolvedCompany != previousCompanyID { throw AuthenticationIssue.company }
+        guard generation == requestGeneration else {
+            throw APIClientError.sessionChanged
+        }
+        guard let resolvedCompany else {
+            throw AuthenticationIssue.company
+        }
+        if keepsContext && resolvedCompany != previousCompanyID {
+            throw AuthenticationIssue.company
+        }
         companyID = resolvedCompany
-        guard let apiBaseURL else { throw AuthenticationIssue.configuration }
+        guard let apiBaseURL else {
+            throw AuthenticationIssue.configuration
+        }
         let client = try APIClient(baseURL: apiBaseURL) { [weak self] forceRefresh in
-            guard let self else { throw APIClientError.missingCredentials }
+            guard let self else {
+                throw APIClientError.missingCredentials
+            }
             return try await self.credentials(forceRefresh: forceRefresh)
         }
         let profile = try await client.get("users/current", as: AuthenticatedUser.self)
@@ -451,16 +444,23 @@ final class AuthenticationSession {
             throw AuthenticationIssue.authorization
         }
         let grants = try await client.get("users/permissions", as: UserPermissions.self)
-        guard let authorizedSessions else { throw AuthenticationIssue.configuration }
+        guard let authorizedSessions else {
+            throw AuthenticationIssue.configuration
+        }
         let snapshot = AuthorizedSessionSnapshot(companyID: resolvedCompany, user: profile, permissions: grants)
         try Task.checkCancellation()
-        guard generation == requestGeneration, auth?.currentUser?.uid == firebaseUser.uid else { throw APIClientError.sessionChanged }
+        guard generation == requestGeneration, auth?.currentUser?.uid == firebaseUser.uid else {
+            throw APIClientError.sessionChanged
+        }
         try await authorizedSessions.save(snapshot)
         try Task.checkCancellation()
-        guard generation == requestGeneration else { throw APIClientError.sessionChanged }
+        guard generation == requestGeneration else {
+            throw APIClientError.sessionChanged
+        }
         return snapshot
     }
 
+    /// Disables account access and publishes the reason startup failed.
     private func failConfiguration(_ reason: AuthenticationConfigurationIssue) {
         clearAuthorization()
         configurationIssue = reason
@@ -468,6 +468,7 @@ final class AuthenticationSession {
         issue = .configuration
     }
 
+    /// Clears business access and permission refresh state.
     private func clearAuthorization() {
         user = nil
         permissions = nil
@@ -478,6 +479,7 @@ final class AuthenticationSession {
         permissionsSyncIssue = nil
     }
 
+    /// Recognizes server and SDK responses that require revoking cached access.
     static func invalidatesAuthorization(_ error: Error) -> Bool {
         if let issue = error as? AuthenticationIssue {
             return issue == .authorization || issue == .company
@@ -489,23 +491,29 @@ final class AuthenticationSession {
                 || apiError == .httpStatus(404) || apiError == .sessionChanged
         }
         let error = error as NSError
-        guard error.domain == AuthErrorDomain else { return false }
+        guard error.domain == AuthErrorDomain else {
+            return false
+        }
         return [AuthErrorCode.userDisabled, .userNotFound, .invalidUserToken, .userTokenExpired]
             .contains { $0.rawValue == error.code }
     }
 
+    /// Recognizes connection failures eligible for verified offline access.
     static func permitsOfflineRestoration(_ error: Error) -> Bool {
         let error = error as NSError
         if error.domain == AuthErrorDomain {
             return error.code == AuthErrorCode.networkError.rawValue
         }
-        guard error.domain == NSURLErrorDomain else { return false }
+        guard error.domain == NSURLErrorDomain else {
+            return false
+        }
         return [URLError.notConnectedToInternet, .networkConnectionLost, .timedOut,
                 .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed].contains {
             $0.rawValue == error.code
         }
     }
 
+    /// Trims an optional configuration or tenant value and discards blank input.
     private static func nonempty(_ value: String?) -> String? {
         guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines),
               !trimmed.isEmpty else { return nil }

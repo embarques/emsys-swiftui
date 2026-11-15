@@ -9,14 +9,24 @@ final class NetworkConnection {
     @ObservationIgnored private let monitor = NWPathMonitor()
     @ObservationIgnored private var isStarted = false
 
+    /// Starts publishing network path updates once for the app.
     func start() {
-        guard !isStarted else { return }
+        guard !isStarted else {
+            return
+        }
         isStarted = true
         monitor.pathUpdateHandler = { [weak self] path in
             let available = path.status == .satisfied
             let unavailable = path.status == .unsatisfied
             Task { @MainActor [weak self] in
-                self?.status = available ? .available : (unavailable ? .unavailable : .unknown)
+                // A path that is neither satisfied nor unsatisfied is still being evaluated.
+                if available {
+                    self?.status = .available
+                } else if unavailable {
+                    self?.status = .unavailable
+                } else {
+                    self?.status = .unknown
+                }
             }
         }
         monitor.start(queue: DispatchQueue(label: "EMSYS.NetworkConnection"))

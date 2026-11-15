@@ -5,10 +5,15 @@ struct InvoicePoolSynchronizer {
     let client: APIClient
     let store: InvoiceStore
 
+    /// Sends and acknowledges queued reservation actions in their saved order.
     func synchronizeActions() async throws {
         while true {
             let actions = try await store.pendingInvoicePoolActions()
-            guard !actions.isEmpty else { return }
+            guard !actions.isEmpty else {
+                return
+            }
+
+            // Retries send the saved action bytes until a matching response arrives.
             for action in actions {
                 try Task.checkCancellation()
                 let payload = try await store.invoicePoolActionPayload(id: action.requestId)
@@ -20,40 +25,81 @@ struct InvoicePoolSynchronizer {
         }
     }
 
+    /// Checks the identities and ownership changes acknowledged by the server.
     private func validate(_ result: [InvoiceReservation], for action: InvoicePoolAction) throws {
-        guard result.count <= 100, Set(result.map(\.id)).count == result.count,
-              result.allSatisfy({ InvoiceWriteDocument.isObjectID($0.id) && !$0.number.isEmpty && !$0.allocation.token.isEmpty }) else { throw APIClientError.invalidResponse }
+        // Every result must have one valid identity and nonempty authorization proof.
+        guard result.count <= 100 else {
+            throw APIClientError.invalidResponse
+        }
+        let resultIDs = Set(result.map(\.id))
+        guard resultIDs.count == result.count else {
+            throw APIClientError.invalidResponse
+        }
+        for reservation in result {
+            guard InvoiceWriteDocument.isObjectID(reservation.id), !reservation.number.isEmpty,
+                  !reservation.allocation.token.isEmpty else {
+                throw APIClientError.invalidResponse
+            }
+        }
+
+        // Each action has a different expected owner and device state.
         switch action.action {
         case .generate:
-            guard result.count == action.count, result.allSatisfy({ $0.allocation.hasOwner && ($0.allocation.deviceId ?? "").isEmpty }) else { throw APIClientError.invalidResponse }
+            guard result.count == action.count,
+                  result.allSatisfy({ $0.allocation.hasOwner && ($0.allocation.deviceId ?? "").isEmpty }) else {
+                throw APIClientError.invalidResponse
+            }
         case .claim:
-            guard let deviceID = UUID(uuidString: action.deviceId ?? ""), result.allSatisfy({ $0.isValid(deviceID: deviceID) }) else { throw APIClientError.invalidResponse }
+            guard let deviceID = UUID(uuidString: action.deviceId ?? ""),
+                  result.allSatisfy({ $0.isValid(deviceID: deviceID) }) else {
+                throw APIClientError.invalidResponse
+            }
         case .return:
-            let proofs = action.items ?? []
-            guard Set(result.map(\.id)) == Set(proofs.map(\.id)), result.allSatisfy({ row in
-                row.allocation.isUnassigned && (row.allocation.deviceId ?? "").isEmpty
-                    && row.allocation.token != proofs.first(where: { $0.id == row.id })?.token
-            }) else { throw APIClientError.invalidResponse }
+            // Match returned identities to their original proof in a single lookup per row.
+            var originalTokens: [String: String] = [:]
+            for proof in action.items ?? [] {
+                if originalTokens[proof.id] == nil {
+                    originalTokens[proof.id] = proof.token
+                }
+            }
+            guard resultIDs == Set(originalTokens.keys) else {
+                throw APIClientError.invalidResponse
+            }
+            for reservation in result {
+                let allocation = reservation.allocation
+                guard allocation.isUnassigned, (allocation.deviceId ?? "").isEmpty,
+                      allocation.token != originalTokens[reservation.id] else {
+                    throw APIClientError.invalidResponse
+                }
+            }
         }
     }
 
+    /// Reconciles all reservation pages against the revision captured before downloading.
     func downloadCurrentPool() async throws {
         let deviceID = try await store.invoicePoolDeviceID()
         let revision = try await store.invoicePoolRevision()
         var cursor: String?
-        var seen = Set<String>()
+        var seenCursors = Set<String>()
         var items: [InvoiceReservation] = []
         var threshold = 10
         repeat {
             try Task.checkCancellation()
             var query = [URLQueryItem(name: "deviceId", value: deviceID.uuidString.lowercased()), URLQueryItem(name: "limit", value: "100")]
-            if let cursor { query.append(URLQueryItem(name: "after", value: cursor)) }
+            // Continue from the last page without repeating a cursor.
+            if let cursor {
+                query.append(URLQueryItem(name: "after", value: cursor))
+            }
             let page = try await client.get("invoices/reserved/mine", queryItems: query, as: InvoicePoolPage.self)
-            guard page.items.count <= 100, items.count + page.items.count <= 10_000 else { throw APIClientError.invalidResponse }
+            guard page.items.count <= 100, items.count + page.items.count <= 10_000 else {
+                throw APIClientError.invalidResponse
+            }
             items.append(contentsOf: page.items)
             threshold = page.lowThreshold
             cursor = page.nextCursor
-            if let cursor, !seen.insert(cursor).inserted { throw APIClientError.invalidResponse }
+            if let cursor, !seenCursors.insert(cursor).inserted {
+                throw APIClientError.invalidResponse
+            }
         } while cursor != nil
         try Task.checkCancellation()
         try await store.reconcileInvoiceReservations(items, lowThreshold: threshold, expectedRevision: revision)

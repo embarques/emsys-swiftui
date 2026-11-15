@@ -90,6 +90,29 @@ final class PickupWorkflowTests: XCTestCase {
         XCTAssertNil(invalid)
     }
 
+    /// Verifies ordered page reads preserve local completion and respect hidden records.
+    func testBatchPickupReadPreservesOrderAndPendingCompletion() async throws {
+        try await withModel(responses: []) { model, store in
+            // Stage one offline completion and cache a second pickup to form a page.
+            await model.complete(online: false)
+            let firstID = model.pickup.id
+            let second = try fixture(id: 43)
+            try await store.save([second])
+
+            // Read in server order and skip IDs that were not downloaded.
+            let page = try await store.pickups(ids: [43, 999, firstID])
+            XCTAssertEqual(page.map(\.id), [43, firstID])
+            XCTAssertEqual(page.last?.pendingCompletion, true)
+
+            // Hide a pickup without deleting the pending work that belongs to it.
+            try await store.remove(id: firstID)
+            let visible = try await store.pickups(ids: [firstID, 43])
+            XCTAssertEqual(visible.map(\.id), [43])
+            let pendingCount = try await store.activeCompletionCount()
+            XCTAssertEqual(pendingCount, 1)
+        }
+    }
+
     func testCompletionPostsFrozenIdentityAndPersistsServerConfirmation() async throws {
         try await withModel(responses: [(200, fixture(completed: true))]) { model, store in
             await model.complete(online: true)
@@ -186,7 +209,7 @@ final class PickupWorkflowTests: XCTestCase {
         try await store.save([fixture()])
         let session = makeSession()
         defer { session.invalidateAndCancel() }
-        let model = PickupListModel(client: try client(session), store: store, isAuthorized: { true })
+        let model = PickupListViewModel(client: try client(session), store: store, isAuthorized: { true })
         await model.load(query: .init(text: "garcia"), online: false)
         XCTAssertEqual(model.pickups.map(\.id), [42])
         XCTAssertTrue(model.isShowingDownloaded)
@@ -208,7 +231,7 @@ final class PickupWorkflowTests: XCTestCase {
     }
 
     private func withModel(responses: [(Int, Pickup)], canUpdate: Bool = true,
-                           perform: (PickupDetailModel, PickupStore) async throws -> Void) async throws {
+                           perform: (PickupDetailViewModel, PickupStore) async throws -> Void) async throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = try await PickupStore.open(directory: directory, userID: "a", companyID: "a")
@@ -217,7 +240,7 @@ final class PickupWorkflowTests: XCTestCase {
         let session = makeSession()
         defer { session.invalidateAndCancel() }
         PickupStub.responses = try responses.map { ($0.0, try JSONEncoder().encode(snapshot($0.1))) }
-        let model = PickupDetailModel(pickup: pickup, client: try client(session), store: store,
+        let model = PickupDetailViewModel(pickup: pickup, client: try client(session), store: store,
             isAuthorized: { true }, canUpdate: { canUpdate })
         await model.refresh(online: false)
         try await perform(model, store)

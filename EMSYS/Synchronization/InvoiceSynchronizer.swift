@@ -7,13 +7,16 @@ struct InvoiceSynchronizer {
     let client: APIClient
     let store: InvoiceStore
 
+    /// Uploads queued changes, refreshes the offline cache, and resumes attachments.
     func synchronize() async throws {
+        // Blocked changes remain actionable while independent downloads continue.
         var needsAttention = false
         do {
             try await InvoiceMutationUploader(client: client, store: store).synchronize()
         } catch InvoiceMutationUploader.UploadError.attentionRequired {
             needsAttention = true
         }
+        // Refresh the first page and all previously cached pages and invoice details.
         let pages = try await store.downloadedPages()
         let detailIDs = try await store.downloadedDetailIDs()
         for page in Set(pages + [1]).sorted() {
@@ -33,8 +36,13 @@ struct InvoiceSynchronizer {
         }
         // Downloaded list/detail records may have supplied the container that
         // locally captured documents were waiting for. Upload them in this run.
-        do { try await InvoiceAttachmentUploader(client: client, store: store).synchronize() }
-        catch InvoiceAttachmentUploader.UploadError.attentionRequired { needsAttention = true }
-        if needsAttention { throw InvoiceMutationUploader.UploadError.attentionRequired }
+        do {
+            try await InvoiceAttachmentUploader(client: client, store: store).synchronize()
+        } catch InvoiceAttachmentUploader.UploadError.attentionRequired {
+            needsAttention = true
+        }
+        if needsAttention {
+            throw InvoiceMutationUploader.UploadError.attentionRequired
+        }
     }
 }

@@ -61,7 +61,7 @@ final class APIHealthCheckTests: XCTestCase {
     func testInvalidConfigurationAndCancellationNeverClaimACompletedCheck() async {
         let session = makeSession()
         for value in [nil, "http://api.example.test/v1", "https://user:secret@api.example.test/v1", "https://api.example.test/v1?token=secret"] as [String?] {
-            let model = APIHealthCheckModel(baseURL: value.flatMap(URL.init(string:)), session: session)
+            let model = APIHealthCheckViewModel(baseURL: value.flatMap(URL.init(string:)), session: session)
             await model.check()
             XCTAssertEqual(model.status, .invalidConfiguration)
             XCTAssertNil(model.baseURL)
@@ -99,9 +99,9 @@ final class APIHealthCheckTests: XCTestCase {
     #endif
 
     private func makeModel(statuses: [Int] = [200], body: String = #"{"success":true,"data":{"status":"ok"}}"#,
-                           error: URLError? = nil) -> APIHealthCheckModel {
+                           error: URLError? = nil) -> APIHealthCheckViewModel {
         let session = makeSession(statuses: statuses, body: body, error: error)
-        return APIHealthCheckModel(baseURL: URL(string: "https://api.example.test/custom/v2"), session: session)
+        return APIHealthCheckViewModel(baseURL: URL(string: "https://api.example.test/custom/v2"), session: session)
     }
 
     private func makeSession(statuses: [Int] = [200], body: String = #"{"success":true,"data":{"status":"ok"}}"#,

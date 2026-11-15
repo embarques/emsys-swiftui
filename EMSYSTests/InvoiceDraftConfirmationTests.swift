@@ -24,7 +24,7 @@ final class InvoiceDraftConfirmationTests: XCTestCase {
         let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = try await InvoiceStore.open(directory: directory, userID: "user", companyID: "company")
-        let model = InvoiceDraftEditorModel(store: store, isAuthorized: { true })
+        let model = InvoiceDraftEditorViewModel(store: store, isAuthorized: { true })
         model.content.policies = []
         #if os(iOS)
         XCTAssertFalse(model.skipsSignature)
@@ -38,7 +38,7 @@ final class InvoiceDraftConfirmationTests: XCTestCase {
         model.setSkipSignature(true)
         await model.save()
         let summaries = try await store.draftSummaries()
-        let reopened = InvoiceDraftEditorModel(draftID: try XCTUnwrap(summaries.first?.id),
+        let reopened = InvoiceDraftEditorViewModel(draftID: try XCTUnwrap(summaries.first?.id),
             store: store, isAuthorized: { true })
         await reopened.load()
         XCTAssertTrue(reopened.skipsSignature)
@@ -51,7 +51,7 @@ final class InvoiceDraftConfirmationTests: XCTestCase {
         let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = try await InvoiceStore.open(directory: directory, userID: "user", companyID: "company")
-        let model = InvoiceDraftEditorModel(store: store, isAuthorized: { true })
+        let model = InvoiceDraftEditorViewModel(store: store, isAuthorized: { true })
         model.content.senderCustomer = InvoiceCustomer(id: "68f800000000000000000001", name: "Sender", customerType: 1,
             active: true, phones: nil, addresses: nil)
         model.content.senderName = "Sender"
@@ -67,7 +67,7 @@ final class InvoiceDraftConfirmationTests: XCTestCase {
         let png = try XCTUnwrap(model.currentSenderSignature?.pngData)
         await model.save()
         let summaries = try await store.draftSummaries()
-        let restored = InvoiceDraftEditorModel(draftID: try XCTUnwrap(summaries.first?.id), store: store, isAuthorized: { true })
+        let restored = InvoiceDraftEditorViewModel(draftID: try XCTUnwrap(summaries.first?.id), store: store, isAuthorized: { true })
         await restored.load()
         XCTAssertEqual(restored.currentSenderSignature?.pngData, png)
         XCTAssertEqual(restored.content.senderSignatureCapturedAt, capturedAt)
@@ -125,7 +125,7 @@ final class InvoiceDraftConfirmationTests: XCTestCase {
         let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = try await InvoiceStore.open(directory: directory, userID: "user", companyID: "company")
-        let model = InvoiceDraftEditorModel(store: store, isAuthorized: { true })
+        let model = InvoiceDraftEditorViewModel(store: store, isAuthorized: { true })
         model.setPoliciesAgreed(true)
         XCTAssertNil(model.currentConfirmation)
         let invalid = InvoiceDraftConfirmation(contextHash: Data(repeating: 0, count: 32), policiesAgreed: true,

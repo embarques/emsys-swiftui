@@ -59,7 +59,7 @@ final class PickupInvoiceContextTests: XCTestCase {
         var content = try context().content(from: pickup(), receiverID: receiverID)
         content.wizardStep = .customers
         content.assignedPickup = InvoiceAssignedPickup(pickupID: 42, senderID: senderID, receiverID: receiverID)
-        let editor = InvoiceDraftEditorModel(assignedOnlyAccess: true, initialContent: content, store: store, isAuthorized: { true })
+        let editor = InvoiceDraftEditorViewModel(assignedOnlyAccess: true, initialContent: content, store: store, isAuthorized: { true })
         let host = UIHostingController(rootView: InvoiceDraftEditorView(model: editor)
             .environment(NetworkConnection()).environment(SynchronizationState())
             .environment(\.locale, Locale(identifier: "es-DO")))

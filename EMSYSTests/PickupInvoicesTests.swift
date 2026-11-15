@@ -17,7 +17,7 @@ final class PickupInvoicesTests: XCTestCase {
         let client = try APIClient(baseURL: XCTUnwrap(URL(string: "https://example.test/v1"))) { _ in
             throw APIClientError.sessionChanged
         }
-        let model = PickupInvoicesModel(pickupID: 42, store: store, client: client,
+        let model = PickupInvoicesViewModel(pickupID: 42, store: store, client: client,
             isAuthorized: { authorized }, canEdit: { editable })
         XCTAssertFalse(model.mayCreate, "Creation must wait until existing invoices have been checked")
         await model.load()
@@ -58,6 +58,7 @@ final class PickupInvoicesTests: XCTestCase {
         XCTAssertTrue(foreign.isEmpty)
     }
 
+    /// Verifies pickup grouping and the unique numbers displayed beside each pickup.
     func testDownloadedInvoicesUseExactPickupIDsAndDoNotDuplicateCompletedReceipts() async throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -73,6 +74,14 @@ final class PickupInvoicesTests: XCTestCase {
         XCTAssertEqual(links[42]?.compactMap(\.number), ["NY-123", "NY-124"])
         XCTAssertEqual(links[43]?.compactMap(\.number), ["NY-125"])
         XCTAssertNil(links[44])
+
+        // Distinct records with the same number still need just one display label.
+        let repeatedNumber = try fixture(id: "000000000000000000000006", number: "NY-124", pickupID: 42)
+        try await store.saveDownloaded([repeatedNumber])
+        let displayed = try await store.pickupInvoiceNumbers(pickupIDs: [42, 43, 44])
+        XCTAssertEqual(displayed[42], ["NY-123", "NY-124"])
+        XCTAssertEqual(displayed[43], ["NY-125"])
+        XCTAssertNil(displayed[44])
     }
 
     private func plan(pickupID: UInt32) throws -> InvoiceCreationPlan {
@@ -106,7 +115,7 @@ final class PickupInvoicesTests: XCTestCase {
         let client = try APIClient(baseURL: XCTUnwrap(URL(string: "https://example.test/v1"))) { _ in
             throw APIClientError.sessionChanged
         }
-        let model = PickupInvoicesModel(pickupID: 42, store: store, client: client, isAuthorized: { true }, canEdit: { true })
+        let model = PickupInvoicesViewModel(pickupID: 42, store: store, client: client, isAuthorized: { true }, canEdit: { true })
         await model.load()
         let host = UIHostingController(rootView: List {
             Section { PickupInvoiceLinksView(model: model) { _ in } }

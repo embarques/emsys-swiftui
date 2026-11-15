@@ -4,7 +4,7 @@ struct SettingsView: View {
     @Environment(AppPreferences.self) private var preferences
 
     @Environment(AuthenticationSession.self) private var session
-    @State private var poolPreference: InvoicePoolPreferenceModel?
+    @State private var poolPreference: InvoicePoolPreferenceViewModel?
     @State private var poolIssue = false
 
     var body: some View {

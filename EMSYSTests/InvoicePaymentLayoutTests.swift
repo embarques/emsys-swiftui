@@ -13,7 +13,7 @@ final class InvoicePaymentLayoutTests: XCTestCase {
         var content = InvoiceDraft.Content()
         content.wizardStep = .payment
         content.items = [.init(name: "Caja", unitPrice: "385")]
-        let model = InvoiceDraftEditorModel(initialContent: content, store: store,
+        let model = InvoiceDraftEditorViewModel(initialContent: content, store: store,
             defaultPaymentRegion: "NY", financialPermission: { _ in true }, isAuthorized: { true })
         let host = UIHostingController(rootView: InvoiceDraftEditorView(model: model)
             .environment(NetworkConnection()).environment(SynchronizationState())

@@ -12,7 +12,7 @@ final class PickupInvoiceAccessTests: XCTestCase {
         let saved = try await store.saveDraft(id: UUID(), content: content, expectedRevision: nil)
         var currentAccess: PickupInvoiceAccess? = .company
         let requiredAccess = try XCTUnwrap(currentAccess)
-        let list = InvoiceDraftListModel(assignedOnly: requiredAccess.assignedOnly, store: store,
+        let list = InvoiceDraftListViewModel(assignedOnly: requiredAccess.assignedOnly, store: store,
             isAuthorized: { currentAccess?.permits(requiredAccess) == true })
         await list.load()
         let summary = try XCTUnwrap(list.drafts.first)
@@ -40,7 +40,7 @@ final class PickupInvoiceAccessTests: XCTestCase {
         let store = try await InvoiceStore.open(directory: directory, userID: "driver", companyID: "company")
         var currentAccess: PickupInvoiceAccess? = .assignedPickup
         let requiredAccess = try XCTUnwrap(currentAccess)
-        let list = InvoiceDraftListModel(assignedOnly: requiredAccess.assignedOnly, store: store,
+        let list = InvoiceDraftListViewModel(assignedOnly: requiredAccess.assignedOnly, store: store,
             isAuthorized: { currentAccess?.permits(requiredAccess) == true })
         XCTAssertTrue(list.isAvailable)
         XCTAssertTrue(list.assignedOnly)

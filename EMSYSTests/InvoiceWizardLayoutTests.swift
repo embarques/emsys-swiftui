@@ -11,7 +11,7 @@ final class InvoiceWizardLayoutTests: XCTestCase {
         let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = try await InvoiceStore.open(directory: directory, userID: "fixture", companyID: "fixture")
-        let model = InvoiceDraftEditorModel(store: store, isAuthorized: { true })
+        let model = InvoiceDraftEditorViewModel(store: store, isAuthorized: { true })
         let removed = InvoiceDraft.Item(name: "Remove", unitPrice: "10")
         let retained = InvoiceDraft.Item(name: "Caja de ropa", quantity: "1.5", unitPrice: "20", labelCount: "2", total: "25")
         model.content.items = [removed, retained]
@@ -85,7 +85,7 @@ final class InvoiceWizardLayoutTests: XCTestCase {
         content.senderAddressID = customer.addresses?.first?.id
         content.receiverName = "Juan Luna García"
         content.items = [.init(name: "Caja de ropa y artículos del hogar para la familia", quantity: "2", unitPrice: "25", labelCount: "2")]
-        let model = InvoiceDraftEditorModel(initialContent: content, store: store,
+        let model = InvoiceDraftEditorViewModel(initialContent: content, store: store,
             canViewItemCatalog: { true }, isAuthorized: { true })
         let host = UIHostingController(rootView: InvoiceDraftEditorView(model: model)
             .environment(NetworkConnection()).environment(SynchronizationState())

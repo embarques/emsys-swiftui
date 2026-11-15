@@ -17,7 +17,7 @@ final class PickupMapTests: XCTestCase {
         let reopened = try await PickupStore.open(directory: directory, userID: "driver", companyID: "company")
         let restored = try await reopened.pickup(id: 1)
         let saved = try XCTUnwrap(restored)
-        let coordinate = try XCTUnwrap(PickupMapModel.coordinate(for: saved))
+        let coordinate = try XCTUnwrap(PickupMapViewModel.coordinate(for: saved))
         XCTAssertEqual(coordinate.longitude, -73.94)
         XCTAssertEqual(coordinate.latitude, 40.84)
         XCTAssertEqual(saved.sender?.displayAddress, "120 Broadway, New York, NY")
@@ -28,26 +28,26 @@ final class PickupMapTests: XCTestCase {
                                 "location": ["type": "Point", "coordinates": [-70, 20]]]]
         payload["sender"] = sender
         let different = try JSONDecoder().decode(Pickup.self, from: JSONSerialization.data(withJSONObject: payload))
-        XCTAssertNil(PickupMapModel.coordinate(for: different))
+        XCTAssertNil(PickupMapViewModel.coordinate(for: different))
         XCTAssertEqual(different.sender?.displayAddress, "Pickup street")
     }
 
     func testInvalidOrMissingLocationsRemainInTheListWithoutInventedPins() throws {
         let coordinates: [[Double]?] = [nil, [], [10], [10, 20, 30], [181, 20], [10, -91]]
         let pickups = try coordinates.enumerated().map { try fixture(id: UInt32($0.offset + 1), coordinates: $0.element) }
-        let model = PickupMapModel(pickups: pickups)
+        let model = PickupMapViewModel(pickups: pickups)
         XCTAssertTrue(model.mappedPickups.isEmpty)
         XCTAssertEqual(model.missingLocationCount, pickups.count)
         XCTAssertEqual(model.pickups.count, pickups.count)
-        XCTAssertNotNil(PickupMapModel.coordinate(for: try fixture(id: 9, coordinates: [0, 0])))
+        XCTAssertNotNil(PickupMapViewModel.coordinate(for: try fixture(id: 9, coordinates: [0, 0])))
         let legacy = try JSONDecoder().decode(Pickup.self, from: Data(#"{"id":50,"completed":false,"sender":{"name":"Legacy"}}"#.utf8))
-        XCTAssertNil(PickupMapModel.coordinate(for: legacy))
+        XCTAssertNil(PickupMapViewModel.coordinate(for: legacy))
     }
 
     func testSelectionSurvivesExpansionButIsRemovedWhenFilteredOut() throws {
         let first = try fixture(id: 1, coordinates: [-73.94, 40.84])
         let second = try fixture(id: 2, coordinates: [-73.98, 40.75])
-        let model = PickupMapModel(pickups: [first, second])
+        let model = PickupMapViewModel(pickups: [first, second])
         model.selectedPickupID = second.id
         model.isExpanded = true
         model.showsExpandedList = true
@@ -69,7 +69,7 @@ final class PickupMapTests: XCTestCase {
         let pickups = [try fixture(id: 1, coordinates: [-73.94, 40.84]),
                        try fixture(id: 2, coordinates: nil),
                        try fixture(id: 3, coordinates: [-73.98, 40.75])] + overlapping
-        let model = PickupMapModel(pickups: pickups)
+        let model = PickupMapViewModel(pickups: pickups)
         let host = UIHostingController(rootView: NavigationStack {
             PickupMapView(model: model) { Text(verbatim: "#\($0.id)") }
                 .navigationTitle("navigation.pickups")

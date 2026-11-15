@@ -11,6 +11,31 @@ Review changed code against these conventions and run the relevant validation
 before reporting completion. These rules apply to new code and modifications to
 existing code.
 
+## Engineering Quality and Source Organization
+
+Write code that can pass a senior engineering review. Use established Swift and
+SwiftUI conventions. Follow the feature's existing patterns where they fit, and
+explain material departures in the change summary.
+
+- Name folders for the responsibility a developer would look for. In larger
+  features, use `Models`, `Views`, `ViewModels`, and `Repositories` as
+  appropriate. Keep a small supporting type next to the code that owns it when
+  both serve the same responsibility.
+- Use `Helpers` for a group of feature-local helpers without a more specific
+  home. Avoid catch-all source folders such as `Support`, `Common`, or
+  `Misc`. Name helper files and types for what they do. Keep HTTP and database
+  adapters behind their repository boundary regardless of folder placement.
+- Use Swift Observation for observable screen state. Use `@Observable` on
+  view models, `@State` when a view owns the model's lifetime, and
+  `@Bindable` where a control needs a writable binding.
+- Trace the normal entry point and relevant failure paths. Check that existing
+  callers and persisted data still work, and that cancellation, retries, or
+  concurrent operations preserve consistent state where applicable.
+- Review the final diff for misplaced responsibilities, duplicate logic, unclear
+  names, unnecessary layers, and unrelated changes. Fix issues introduced by
+  the change before reporting completion, and state which checks ran and which
+  could not be performed.
+
 ## Required MVVM and Repository Architecture
 
 Use MVVM for feature screens and the Repository pattern for business data access.

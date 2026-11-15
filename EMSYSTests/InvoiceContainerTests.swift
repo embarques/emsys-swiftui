@@ -22,7 +22,7 @@ final class InvoiceContainerTests: XCTestCase {
         let store = try await InvoiceStore.open(directory: directory, userID: "user", companyID: "company")
         let container = fixture(67)
         try await store.saveContainers([container])
-        let editor = InvoiceDraftEditorModel(store: store, client: try makeClient(), canViewContainers: { true }, isAuthorized: { true })
+        let editor = InvoiceDraftEditorViewModel(store: store, client: try makeClient(), canViewContainers: { true }, isAuthorized: { true })
         editor.selectContainer(container)
         let draft = try await store.saveDraft(id: UUID(), content: editor.content, expectedRevision: nil)
         let reopened = try await InvoiceStore.open(directory: directory, userID: "user", companyID: "company")
@@ -48,7 +48,7 @@ final class InvoiceContainerTests: XCTestCase {
         let first = (100...139).reversed().map { fixture(UInt32($0)) }
         ContainerLookupProtocol.responses = [(200, try envelope(first)), (500, Data())]
         ContainerLookupProtocol.requests = []
-        let model = InvoiceContainerSearchModel(client: try makeClient(), store: store, isAuthorized: { true })
+        let model = InvoiceContainerSearchViewModel(client: try makeClient(), store: store, isAuthorized: { true })
         model.query = "Ship"
         await model.search(online: true)
         XCTAssertEqual(model.containers, first)
@@ -82,7 +82,7 @@ final class InvoiceContainerTests: XCTestCase {
         try await store.saveContainers([fixture(67)])
         ContainerLookupProtocol.requests = []
         var authorized = true
-        let model = InvoiceContainerSearchModel(client: try makeClient(), store: store, isAuthorized: { authorized })
+        let model = InvoiceContainerSearchViewModel(client: try makeClient(), store: store, isAuthorized: { authorized })
         await model.search(online: false)
         XCTAssertEqual(model.containers, [fixture(67)])
         XCTAssertTrue(model.isShowingDownloaded)

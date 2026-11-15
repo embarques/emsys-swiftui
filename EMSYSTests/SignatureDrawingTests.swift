@@ -31,6 +31,26 @@ final class SignatureDrawingTests: XCTestCase {
         await assertRejected(drawing, width: -1, height: 100)
     }
 
+    /// Accepts the exact stroke budget and rejects oversized or nonnormalized drawings.
+    func testStrokeValidationAtThePersistedLimits() {
+        let point = SignatureDrawing.Point(x: 0.5, y: 0.5)
+        let stroke = Array(repeating: point, count: 100)
+        let maximum = SignatureDrawing(strokes: Array(repeating: stroke, count: 1_000))
+        XCTAssertTrue(maximum.hasValidStrokes)
+
+        // Either limit can independently reject a drawing.
+        let tooManyPoints = SignatureDrawing(strokes: [
+            Array(repeating: point, count: 100_001)
+        ])
+        XCTAssertFalse(tooManyPoints.hasValidStrokes)
+        let tooManyStrokes = SignatureDrawing(strokes: Array(repeating: [point], count: 1_001))
+        XCTAssertFalse(tooManyStrokes.hasValidStrokes)
+
+        // A single invalid point must be rejected regardless of the drawing size.
+        let outsideCanvas = SignatureDrawing(strokes: [[.init(x: -0.1, y: 0.5)]])
+        XCTAssertFalse(outsideCanvas.hasValidStrokes)
+    }
+
     func testSignatureCanvasFitsPortraitAndCompactLandscapeWithoutFooterCrowding() {
         let portrait = CGSize(width: 390, height: 650)
         let landscape = CGSize(width: 760, height: 250)
@@ -66,7 +86,7 @@ extension SignatureDrawingTests {
         let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = try await InvoiceStore.open(directory: directory, userID: "signature-fixture", companyID: "company")
-        let model = InvoiceDraftEditorModel(store: store, isAuthorized: { true })
+        let model = InvoiceDraftEditorViewModel(store: store, isAuthorized: { true })
         model.content.senderName = "María García Hernández"
         model.content.senderCustomer = InvoiceCustomer(id: "68f800000000000000000001", name: model.content.senderName,
             customerType: 1, active: true, phones: nil, addresses: nil)
@@ -195,7 +215,7 @@ extension SignatureDrawingTests {
         let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = try await InvoiceStore.open(directory: directory, userID: "signature-fixture", companyID: "company")
-        let model = InvoiceDraftEditorModel(store: store, isAuthorized: { true })
+        let model = InvoiceDraftEditorViewModel(store: store, isAuthorized: { true })
         model.content.senderName = "María García Hernández"
         model.content.senderCustomer = InvoiceCustomer(id: "68f800000000000000000001", name: model.content.senderName,
             customerType: 1, active: true, phones: nil, addresses: nil)

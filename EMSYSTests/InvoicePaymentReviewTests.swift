@@ -11,7 +11,7 @@ final class InvoicePaymentReviewTests: XCTestCase {
         let store = try await InvoiceStore.open(directory: directory, userID: "user", companyID: "company")
         PaymentReviewProtocol.requests = []
         PaymentReviewProtocol.responses = [(200, try envelope([statement()]))]
-        let model = InvoicePaymentReviewModel(day: day, client: try makeClient(), store: store,
+        let model = InvoicePaymentReviewViewModel(day: day, client: try makeClient(), store: store,
             isAuthorized: { true }, currentBranchID: { 1 })
         await model.load(online: true)
         XCTAssertTrue(model.canSelect)
@@ -41,7 +41,7 @@ final class InvoicePaymentReviewTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = try await InvoiceStore.open(directory: directory, userID: "user", companyID: "company")
         PaymentReviewProtocol.requests = []
-        let model = InvoicePaymentReviewModel(day: day, client: try makeClient(), store: store,
+        let model = InvoicePaymentReviewViewModel(day: day, client: try makeClient(), store: store,
             isAuthorized: { true }, currentBranchID: { 1 })
         await model.load(online: false)
         XCTAssertNil(model.review)
@@ -67,7 +67,7 @@ final class InvoicePaymentReviewTests: XCTestCase {
         let store = try await InvoiceStore.open(directory: directory, userID: "user", companyID: "company")
         let previous = InvoicePaymentReview(branchID: 1, day: day, statement: statement(), downloadedAt: .now)
         try await store.savePaymentReview(previous)
-        let model = InvoicePaymentReviewModel(day: day, client: try makeClient(), store: store,
+        let model = InvoicePaymentReviewViewModel(day: day, client: try makeClient(), store: store,
             isAuthorized: { true }, currentBranchID: { 1 })
         PaymentReviewProtocol.responses = [(200, try envelope([statement(branchID: 2)]))]
         await model.load(online: true)
@@ -101,7 +101,7 @@ final class InvoicePaymentReviewTests: XCTestCase {
             return APICredentials(sessionID: contextID, userID: "user", companyID: "company", idToken: "test-token")
         }
         PaymentReviewProtocol.responses = [(200, try envelope([statement()]))]
-        let model = InvoicePaymentReviewModel(day: day, client: client, store: store,
+        let model = InvoicePaymentReviewViewModel(day: day, client: client, store: store,
             isAuthorized: { true }, currentBranchID: { currentBranch })
         let task = Task { await model.load(online: true) }
         await fulfillment(of: [started], timeout: 3)
@@ -120,7 +120,7 @@ final class InvoicePaymentReviewTests: XCTestCase {
         let store = try await InvoiceStore.open(directory: directory, userID: "user", companyID: "company")
         let review = InvoicePaymentReview(branchID: 1, day: day, statement: statement(), downloadedAt: .now)
         try await store.savePaymentReview(review)
-        let editor = InvoiceDraftEditorModel(store: store, client: try makeClient(), canReviewPayments: { true }, currentBranchID: { 1 }, isAuthorized: { true })
+        let editor = InvoiceDraftEditorViewModel(store: store, client: try makeClient(), canReviewPayments: { true }, currentBranchID: { 1 }, isAuthorized: { true })
         editor.selectPaymentReview(review)
         editor.content.paymentRegion = "RD"
         let draft = try await store.saveDraft(id: UUID(), content: editor.content, expectedRevision: nil)
@@ -167,7 +167,7 @@ final class InvoicePaymentReviewTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = try await InvoiceStore.open(directory: directory, userID: "user", companyID: "company")
         PaymentReviewProtocol.requests = []
-        let model = InvoicePaymentReviewModel(day: day, client: try makeClient(), store: store,
+        let model = InvoicePaymentReviewViewModel(day: day, client: try makeClient(), store: store,
             isAuthorized: { true }, currentBranchID: { nil })
         await model.load(online: true)
         XCTAssertEqual(model.issue, "paymentReview.missingBranch")

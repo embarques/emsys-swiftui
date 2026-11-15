@@ -6,7 +6,7 @@ import XCTest
 final class InvoicePreviewTests: XCTestCase {
     func testGenerationPresentsTheExactSavedPDFForReview() async throws {
         let document = try fixture()
-        let preview = InvoicePreviewModel()
+        let preview = InvoicePreviewViewModel()
         let task = preview.generate(isAuthorized: { true }) { document }
         await task?.value
         XCTAssertEqual(preview.document?.id, document.id)
@@ -21,7 +21,7 @@ final class InvoicePreviewTests: XCTestCase {
 
     func testRevokedAuthorizationCannotPublishFinishedGeneration() async throws {
         let document = try fixture()
-        let preview = InvoicePreviewModel()
+        let preview = InvoicePreviewViewModel()
         var authorized = true
         let started = expectation(description: "Generation started")
         var finish: CheckedContinuation<InvoiceDocument, Never>?
@@ -43,7 +43,7 @@ final class InvoicePreviewTests: XCTestCase {
     func testCancellationPreventsOldWorkFromReplacingANewerPreview() async throws {
         let oldDocument = try fixture()
         let newDocument = try fixture()
-        let preview = InvoicePreviewModel()
+        let preview = InvoicePreviewViewModel()
         let started = expectation(description: "Old generation is suspended")
         var finish: CheckedContinuation<InvoiceDocument, Never>?
         let oldTask = preview.generate(isAuthorized: { true }) {
@@ -71,7 +71,7 @@ final class InvoicePreviewTests: XCTestCase {
     }
 
     func testGenerationFailureCanBeRetriedWithoutShowingAnOldDocument() async throws {
-        let preview = InvoicePreviewModel()
+        let preview = InvoicePreviewViewModel()
         let failure = preview.generate(isAuthorized: { true }) { throw DocumentError.invalidPDF }
         await failure?.value
         XCTAssertTrue(preview.failed)

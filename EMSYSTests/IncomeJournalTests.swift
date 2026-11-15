@@ -40,6 +40,7 @@ final class IncomeJournalTests: XCTestCase {
         XCTAssertNil(expense.decimalAmount)
     }
 
+    /// Checks the offline activity snapshot before and after server confirmation.
     func testOfflineEntrySurvivesReopenAndConfirmationUpdatesPostedTotalsOnce() async throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -59,10 +60,10 @@ final class IncomeJournalTests: XCTestCase {
         try await store.enqueue(operation)
 
         let reopened = try await IncomeStore.open(directory: directory, userID: "fixture", companyID: "fixture")
-        let savedOutbox = try await reopened.outbox()
-        XCTAssertEqual(savedOutbox.first?.body, operation.body)
-        let unposted = try await reopened.period(branchID: period.branchID, day: period.day)
-        XCTAssertEqual(unposted?.journals.count, 0)
+        // A pending entry is visible without contributing to posted totals.
+        let unposted = try await reopened.activity(branchID: period.branchID, day: period.day)
+        XCTAssertEqual(unposted.pending.first?.body, operation.body)
+        XCTAssertEqual(unposted.period?.journals.count, 0)
         let staleRevision = try await reopened.revision()
 
         let wrongReceipt = try journal(statementID: 99)
@@ -74,10 +75,10 @@ final class IncomeJournalTests: XCTestCase {
         let receipt = try journal(statementID: 7)
         try await reopened.confirm(operation, receipt: receipt)
         try await reopened.confirm(operation, receipt: receipt)
-        let confirmed = try await reopened.period(branchID: period.branchID, day: period.day)
-        XCTAssertEqual(confirmed?.journals.map(\.amount), [150])
-        let remaining = try await reopened.outbox()
-        XCTAssertTrue(remaining.isEmpty)
+        // One committed read shows the receipt and the absence of its old pending entry.
+        let confirmed = try await reopened.activity(branchID: period.branchID, day: period.day)
+        XCTAssertEqual(confirmed.period?.journals.map(\.amount), [150])
+        XCTAssertTrue(confirmed.pending.isEmpty)
         let staleSaved = try await reopened.save(period, ifUnchangedSince: staleRevision)
         XCTAssertFalse(staleSaved)
 
@@ -95,13 +96,13 @@ final class IncomeJournalTests: XCTestCase {
         let request = try XCTUnwrap(draft.request(id: id, statement: statement(), accounts: accounts()))
         let operation = PendingIncomeJournal(id: id, branchID: period.branchID, day: period.day,
             timeZone: period.timeZone, currency: "USD", request: request, body: try JSONEncoder().encode(request))
-        let current = IncomeJournalService.CloseoutContext(today: period.day.apiValue, serverTimezone: period.timeZone,
+        let current = IncomeRepository.CloseoutContext(today: period.day.apiValue, serverTimezone: period.timeZone,
             current: period.statement, latest: period.statement)
         XCTAssertTrue(current.matches(operation))
-        let closed = IncomeJournalService.CloseoutContext(today: period.day.apiValue, serverTimezone: period.timeZone,
+        let closed = IncomeRepository.CloseoutContext(today: period.day.apiValue, serverTimezone: period.timeZone,
             current: nil, latest: period.statement)
         XCTAssertFalse(closed.matches(operation))
-        let next = IncomeJournalService.CloseoutContext(today: "2027-01-01", serverTimezone: period.timeZone,
+        let next = IncomeRepository.CloseoutContext(today: "2027-01-01", serverTimezone: period.timeZone,
             current: period.statement, latest: period.statement)
         XCTAssertFalse(next.matches(operation))
     }
@@ -147,7 +148,7 @@ final class IncomeJournalTests: XCTestCase {
         do {
             try await service.upload(branchID: 3, isAuthorized: { true })
             XCTFail("A new business day requires review")
-        } catch IncomeJournalService.UploadError.attentionRequired { }
+        } catch IncomeRepository.UploadError.attentionRequired { }
         XCTAssertEqual(IncomeProtocol.requests().map(\.path), ["/v1/income-statements/context"])
         let outbox = try await service.store.outbox()
         XCTAssertEqual(outbox.first?.reviewReason, "income.periodChanged")
@@ -155,6 +156,7 @@ final class IncomeJournalTests: XCTestCase {
     }
 
     #if os(iOS)
+    /// Renders Ingresos and checks the decimal field used to enter a journal amount.
     func testNativeIncomeEntryFormsRenderAndFocusDecimalFieldOnPhone() async throws {
         let (service, directory, session) = try await fixture()
         defer { session.invalidateAndCancel(); try? FileManager.default.removeItem(at: directory) }
@@ -170,7 +172,8 @@ final class IncomeJournalTests: XCTestCase {
             timeZone: "GMT", currentStatementID: 7)
         let revision = try await service.store.revision()
         _ = try await service.store.save(period, ifUnchangedSince: revision)
-        let model = IncomeModel(service: service, branchID: 3, isAuthorized: { true }, mayCreate: { true })
+        // Render from the cached period through the feature repository.
+        let model = IncomeViewModel(repository: service, branchID: 3, isAuthorized: { true }, mayCreate: { true })
         await model.load(selectedDay: day, online: false)
         XCTAssertTrue(model.canCreate)
         XCTAssertEqual(model.total(.sale) - model.total(.expense), 95)
@@ -231,7 +234,7 @@ final class IncomeJournalTests: XCTestCase {
     }
     #endif
 
-    private func fixture() async throws -> (IncomeJournalService, URL, URLSession) {
+    private func fixture() async throws -> (IncomeRepository, URL, URLSession) {
         let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         let store = try await IncomeStore.open(directory: directory, userID: "fixture", companyID: "fixture")
         let configuration = URLSessionConfiguration.ephemeral
@@ -241,7 +244,7 @@ final class IncomeJournalTests: XCTestCase {
         let client = try APIClient(baseURL: XCTUnwrap(URL(string: "https://example.test/v1")), session: session) { _ in
             APICredentials(sessionID: context, userID: "fixture", companyID: "fixture", idToken: "fixture-token")
         }
-        return (IncomeJournalService(client: client, store: store), directory, session)
+        return (IncomeRepository(client: client, store: store), directory, session)
     }
 
     private func envelope<Value: Encodable>(_ value: Value) throws -> Data {

@@ -8,7 +8,7 @@ final class InvoiceItemCatalogTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = try await InvoiceStore.open(directory: directory, userID: "user", companyID: "company")
         var allowed = true
-        let editor = InvoiceDraftEditorModel(store: store, canViewItemCatalog: { allowed }, isAuthorized: { true })
+        let editor = InvoiceDraftEditorViewModel(store: store, canViewItemCatalog: { allowed }, isAuthorized: { true })
         let row = InvoiceDraft.Item(name: "Typed", quantity: "3", unitPrice: "2", labelCount: "2", total: "25")
         editor.content.items = [row]
         let selected = InvoiceCatalogItem(id: 7, name: "CAJA GRANDE", price: 12.5, createdAt: nil)
@@ -42,7 +42,7 @@ final class InvoiceItemCatalogTests: XCTestCase {
         let newer = InvoiceCatalogItem(id: 2, name: "Caja grande", price: 20, createdAt: "2026-10-26T00:00:00Z")
         try await store.saveItemCatalog([older, newer])
         let reopened = try await InvoiceStore.open(directory: directory, userID: "user", companyID: "company")
-        let editor = InvoiceDraftEditorModel(store: reopened, canViewItemCatalog: { true }, isAuthorized: { true })
+        let editor = InvoiceDraftEditorViewModel(store: reopened, canViewItemCatalog: { true }, isAuthorized: { true })
         await editor.loadItemCatalog(online: false)
         XCTAssertEqual(InvoiceCatalogItem.matching(editor.catalogItems, query: " caja ").map(\.id), [2, 1])
         XCTAssertEqual(InvoiceCatalogItem.matching(editor.catalogItems, query: "pequena").map(\.id), [1])
@@ -73,7 +73,7 @@ final class InvoiceItemCatalogTests: XCTestCase {
         let client = try APIClient(baseURL: XCTUnwrap(URL(string: "https://example.test/v1")), session: session) { _ in
             APICredentials(sessionID: contextID, userID: "user", companyID: "company", idToken: "test-token")
         }
-        let editor = InvoiceDraftEditorModel(store: store, client: client, canViewItemCatalog: { true }, isAuthorized: { true })
+        let editor = InvoiceDraftEditorViewModel(store: store, client: client, canViewItemCatalog: { true }, isAuthorized: { true })
         await editor.loadItemCatalog(online: true)
         XCTAssertEqual(editor.catalogItems.first?.name, "BARRIL")
         XCTAssertFalse(editor.catalogIsDownloaded)

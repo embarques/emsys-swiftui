@@ -2,11 +2,12 @@ import SwiftUI
 
 @MainActor
 struct APIConnectionSection: View {
-    @State private var model: APIHealthCheckModel
+    @State private var model: APIHealthCheckViewModel
     @State private var checkTask: Task<Void, Never>?
 
-    init(model: APIHealthCheckModel? = nil) {
-        _model = State(initialValue: model ?? APIHealthCheckModel())
+    /// Uses the supplied health state or opens a fresh connection check.
+    init(model: APIHealthCheckViewModel? = nil) {
+        _model = State(initialValue: model ?? APIHealthCheckViewModel())
     }
 
     var body: some View {

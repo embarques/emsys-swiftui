@@ -68,18 +68,34 @@ final class APIClientTests: XCTestCase {
         XCTAssertEqual(APIStubProtocol.requests.first?.url?.path, "/v1/journals/sync")
     }
 
+    /// Checks the upload wire format and verifies that token refresh preserves it.
     func testMultipartUploadPreservesBytesAndTenantAcrossTokenRefresh() async throws {
+        // Return an unauthorized response first so the client must retry the upload.
         let session = makeSession(statuses: [401, 200])
-        defer { session.invalidateAndCancel() }
+        defer {
+            session.invalidateAndCancel()
+        }
         let client = try APIClient(baseURL: baseURL, session: session) { _ in self.firstCredentials }
-        let file = try InvoiceAttachment.prepare(name: "proof.pdf", bytes: Data("%PDF-1.7\nfixture".utf8))
-        let payload = try file.attachment.multipart(bytes: file.bytes)
+        let file = try InvoiceAttachmentFile.prepare(name: "proof.pdf", bytes: Data("%PDF-1.7\nfixture".utf8))
+        // Compare against the existing wire format independently of the encoder.
+        let id = file.attachment.id.uuidString
+        let boundary = "EMSYS-\(id)"
+        let expectedHeader = "--\(boundary)\r\nContent-Disposition: form-data; name=\"uploadId\"\r\n\r\n\(id)\r\n"
+            + "--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"proof.pdf\"\r\n"
+            + "Content-Type: application/pdf\r\n\r\n"
+        var expectedBody = Data(expectedHeader.utf8)
+        expectedBody.append(file.bytes)
+        expectedBody.append(Data("\r\n--\(boundary)--\r\n".utf8))
+        let payload = try InvoiceAttachmentUpload.encode(file.attachment, bytes: file.bytes)
+        XCTAssertEqual(payload, expectedBody)
+
+        // Inspect the original and retried requests with the same expected tenant and body.
         let _: Profile = try await client.upload("invoices/000000000000000000000001/documents", encodedBody: payload,
-            boundary: file.attachment.boundary, as: Profile.self)
+            boundary: InvoiceAttachmentUpload.boundary(for: file.attachment), as: Profile.self)
         XCTAssertEqual(APIStubProtocol.requests.count, 2)
         for request in APIStubProtocol.requests {
-            XCTAssertEqual(try requestBody(request), payload)
-            XCTAssertEqual(request.value(forHTTPHeaderField: "Content-Type"), "multipart/form-data; boundary=\(file.attachment.boundary)")
+            XCTAssertEqual(try requestBody(request), expectedBody)
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Content-Type"), "multipart/form-data; boundary=\(boundary)")
             XCTAssertEqual(request.value(forHTTPHeaderField: "X-Company-ID"), "test-company")
         }
     }
@@ -258,7 +274,7 @@ final class APIClientTests: XCTestCase {
         let session = makeSession(statuses: [503])
         defer { session.invalidateAndCancel() }
         let client = try APIClient(baseURL: baseURL, session: session) { _ in self.firstCredentials }
-        let model = InvoiceListModel(client: client, store: store)
+        let model = InvoiceListViewModel(client: client, store: store)
         await model.load()
         XCTAssertTrue(model.invoices.isEmpty)
         XCTAssertFalse(model.isShowingDownloaded)

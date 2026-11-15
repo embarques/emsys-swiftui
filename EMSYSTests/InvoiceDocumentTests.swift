@@ -85,6 +85,51 @@ final class InvoiceDocumentTests: XCTestCase {
         XCTAssertNil(PDFStubProtocol.request)
     }
 
+    /// Confirms the report picker accepts only distinct choices tied to its invoice.
+    func testSignatureOptionsRejectForeignInvoicesAndDuplicateReceivers() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer {
+            try? FileManager.default.removeItem(at: directory)
+        }
+        let store = try await InvoiceStore.open(directory: directory, userID: "user", companyID: "company")
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [PDFStubProtocol.self]
+        let session = URLSession(configuration: configuration)
+        defer {
+            session.invalidateAndCancel()
+        }
+        let baseURL = try XCTUnwrap(URL(string: "https://example.test/v1"))
+        let sessionID = UUID()
+        let client = try APIClient(baseURL: baseURL, session: session) { _ in
+            APICredentials(sessionID: sessionID, userID: "user", companyID: "company", idToken: "fixture")
+        }
+        let repository = InvoiceDocumentRepository(client: client, store: store)
+        PDFStubProtocol.status = 200
+        PDFStubProtocol.length = nil
+        PDFStubProtocol.contentType = "application/json"
+        let invoiceID = "68f800000000000000000001"
+
+        // The valid response must preserve the available receiver choice.
+        PDFStubProtocol.payload = Data(#"{"success":true,"data":[{"invoiceId":"68f800000000000000000001","invoiceNumber":"INV-1","receiverSignatures":[{"id":"one","signerName":"Receiver"}]}]}"#.utf8)
+        let options = try await repository.signatureOptions(invoiceID: invoiceID)
+        XCTAssertEqual(options.receiverSignatures.map(\.id), ["one"])
+
+        // Reject cross-invoice results and repeated IDs before the view sees them.
+        let invalidResponses = [
+            #"{"success":true,"data":[{"invoiceId":"68f800000000000000000002","invoiceNumber":"INV-2","receiverSignatures":[]}]}"#,
+            #"{"success":true,"data":[{"invoiceId":"68f800000000000000000001","invoiceNumber":"INV-1","receiverSignatures":[{"id":"one","signerName":"A"},{"id":"one","signerName":"B"}]}]}"#
+        ]
+        for response in invalidResponses {
+            PDFStubProtocol.payload = Data(response.utf8)
+            do {
+                _ = try await repository.signatureOptions(invoiceID: invoiceID)
+                XCTFail("Invalid choices must not be shown")
+            } catch DocumentError.invalidSelection {
+                continue
+            }
+        }
+    }
+
     private func fixturePDF() throws -> Data {
         let data = NSMutableData()
         let consumer = try XCTUnwrap(CGDataConsumer(data: data))

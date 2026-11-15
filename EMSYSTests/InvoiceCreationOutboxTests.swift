@@ -57,7 +57,7 @@ final class InvoiceCreationOutboxTests: XCTestCase {
             XCTFail("Duplicate should require review")
         } catch InvoiceCreationUploader.UploadError.attentionRequired { }
 
-        let model = InvoiceDraftEditorModel(draftID: draftID, store: store,
+        let model = InvoiceDraftEditorViewModel(draftID: draftID, store: store,
             financialPermission: { _ in true }, isAuthorized: { true })
         await model.load()
         XCTAssertTrue(model.canReplaceInvoiceNumber)
@@ -107,7 +107,7 @@ final class InvoiceCreationOutboxTests: XCTestCase {
         try await store.setInvoiceCreationState(id: operation.id, state: .needsReview,
             failure: .init(stage: .payment, status: 409, message: "Invoice already exists"))
 
-        let model = InvoiceDraftEditorModel(draftID: draftID, store: store,
+        let model = InvoiceDraftEditorViewModel(draftID: draftID, store: store,
             financialPermission: { _ in true }, isAuthorized: { true })
         await model.load()
         let host = UIHostingController(rootView: InvoiceDraftEditorView(model: model)
@@ -304,7 +304,7 @@ final class InvoiceCreationOutboxTests: XCTestCase {
             XCTFail("Payment requires a closeout")
         } catch InvoiceCreationUploader.UploadError.attentionRequired { }
         let reopened = try await open(directory)
-        let editor = InvoiceDraftEditorModel(draftID: operation.draftID, store: reopened, client: client,
+        let editor = InvoiceDraftEditorViewModel(draftID: operation.draftID, store: reopened, client: client,
             financialPermission: { $0 == .createInvoice }, isAuthorized: { true })
         await editor.load()
         XCTAssertEqual(editor.creation?.failure?.requiresCloseout, true)
@@ -353,13 +353,15 @@ final class InvoiceCreationOutboxTests: XCTestCase {
         XCTAssertEqual(CreationProtocol.bodies[0], CreationProtocol.bodies[1])
     }
 
+    /// Verifies attachment uploads are retried from stored bytes after reopening the database.
     func testAttachmentBytesSurviveReopenAndUploadRetryWithoutRecreatingInvoice() async throws {
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = try await open(directory)
         let draftID = UUID()
         let plan = try makePlan()
-        let file = try InvoiceAttachment.prepare(name: "proof.pdf", bytes: Data("%PDF-1.7\nfixture".utf8))
+        // Prepare file metadata and bytes using the same path as a local import.
+        let file = try InvoiceAttachmentFile.prepare(name: "proof.pdf", bytes: Data("%PDF-1.7\nfixture".utf8))
         let saved = try await store.stageAttachment(file.attachment, bytes: file.bytes, draftID: draftID,
             content: plan.content, expectedRevision: nil)
         let frozen = try InvoiceCreationPlan(content: saved.content, branch: plan.branch)
@@ -391,6 +393,7 @@ final class InvoiceCreationOutboxTests: XCTestCase {
         XCTAssertTrue(hidden.isEmpty)
     }
 
+    /// Checks that the attachment and draft revision change together and that removal persists.
     func testAttachmentImportRollsBackOnStaleDraftAndRemovalIsDurable() async throws {
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -398,7 +401,8 @@ final class InvoiceCreationOutboxTests: XCTestCase {
         let draftID = UUID()
         let content = InvoiceDraft.Content()
         let first = try await store.saveDraft(id: draftID, content: content, expectedRevision: nil)
-        let file = try InvoiceAttachment.prepare(name: "photo.png", bytes: Data([137, 80, 78, 71, 13, 10, 26, 10, 1]))
+        // Prepare file metadata and bytes using the same path as a local import.
+        let file = try InvoiceAttachmentFile.prepare(name: "photo.png", bytes: Data([137, 80, 78, 71, 13, 10, 26, 10, 1]))
         do {
             _ = try await store.stageAttachment(file.attachment, bytes: file.bytes, draftID: draftID, content: content, expectedRevision: nil)
             XCTFail("Must not overwrite another saved revision")
@@ -413,16 +417,18 @@ final class InvoiceCreationOutboxTests: XCTestCase {
         let reopened = try await open(directory)
         let remaining = try await reopened.invoiceAttachments(draftID: draftID)
         XCTAssertTrue(remaining.isEmpty)
-        XCTAssertThrowsError(try InvoiceAttachment.prepare(name: "bad\r\n.pdf", bytes: Data("%PDF-1.7".utf8)))
-        XCTAssertThrowsError(try InvoiceAttachment.prepare(name: "script.svg", bytes: Data("<svg/>".utf8)))
-        XCTAssertThrowsError(try InvoiceAttachment.prepare(name: "huge.pdf", bytes: Data(repeating: 0, count: InvoiceAttachment.maximumSize + 1)))
+        XCTAssertThrowsError(try InvoiceAttachmentFile.prepare(name: "bad\r\n.pdf", bytes: Data("%PDF-1.7".utf8)))
+        XCTAssertThrowsError(try InvoiceAttachmentFile.prepare(name: "script.svg", bytes: Data("<svg/>".utf8)))
+        XCTAssertThrowsError(try InvoiceAttachmentFile.prepare(name: "huge.pdf", bytes: Data(repeating: 0, count: InvoiceAttachment.maximumSize + 1)))
     }
 
+    /// Checks that a draft copy gets its own upload identity and frozen drafts cannot be copied.
     func testCopiedDraftGetsIndependentAttachmentIdentityAndRejectsFrozenCreationCopy() async throws {
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = try await open(directory)
-        let file = try InvoiceAttachment.prepare(name: "proof.pdf", bytes: Data("%PDF-1.7\nfixture".utf8))
+        // Prepare file metadata and bytes using the same path as a local import.
+        let file = try InvoiceAttachmentFile.prepare(name: "proof.pdf", bytes: Data("%PDF-1.7\nfixture".utf8))
         let saved = try await store.stageAttachment(file.attachment, bytes: file.bytes, draftID: UUID(),
             content: makePlan().content, expectedRevision: nil)
         let copied = try await store.copyDraft(sourceID: saved.id, content: saved.content)
@@ -430,7 +436,8 @@ final class InvoiceCreationOutboxTests: XCTestCase {
         XCTAssertNotEqual(copiedFile.id, file.attachment.id)
         XCTAssertEqual(copiedFile.digest, file.attachment.digest)
         let body = try await store.attachmentBody(id: copiedFile.id)
-        XCTAssertEqual(body, try copiedFile.multipart(bytes: file.bytes))
+        // Compare the queued upload with the multipart body for this attachment identity.
+        XCTAssertEqual(body, try InvoiceAttachmentUpload.encode(copiedFile, bytes: file.bytes))
         let plan = try InvoiceCreationPlan(content: saved.content, branch: makePlan().branch)
         _ = try await store.queueInvoiceCreation(draftID: saved.id, expectedRevision: saved.revision, plan: plan)
         do {
@@ -479,6 +486,7 @@ final class InvoiceCreationOutboxTests: XCTestCase {
         XCTAssertNotNil(invoice["reservation"])
     }
 
+    /// Checks that the original upload can be reconstructed after a container is assigned.
     func testAttachmentsWaitDurablyForLaterContainerAssignment() async throws {
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -487,7 +495,8 @@ final class InvoiceCreationOutboxTests: XCTestCase {
         content.container = nil
         content.pickupSource = nil
         content.pickupEmployee = nil
-        let file = try InvoiceAttachment.prepare(name: "proof.pdf", bytes: Data("%PDF-1.7\nfixture".utf8))
+        // Prepare file metadata and bytes using the same path as a local import.
+        let file = try InvoiceAttachmentFile.prepare(name: "proof.pdf", bytes: Data("%PDF-1.7\nfixture".utf8))
         let saved = try await store.stageAttachment(file.attachment, bytes: file.bytes, draftID: UUID(), content: content, expectedRevision: nil)
         let plan = try InvoiceCreationPlan(content: saved.content, branch: makePlan().branch)
         _ = try await store.queueInvoiceCreation(draftID: saved.id, expectedRevision: saved.revision, plan: plan)
@@ -502,13 +511,15 @@ final class InvoiceCreationOutboxTests: XCTestCase {
         let pending = try await reopened.activeAttachmentCount()
         XCTAssertEqual(pending, 1)
         let body = try await reopened.attachmentBody(id: file.attachment.id)
-        XCTAssertEqual(body, try file.attachment.multipart(bytes: file.bytes))
+        // Compare the queued upload with the multipart body for this attachment identity.
+        XCTAssertEqual(body, try InvoiceAttachmentUpload.encode(file.attachment, bytes: file.bytes))
         do {
             try await reopened.deleteDraft(id: saved.id, expectedRevision: saved.revision + 1)
             XCTFail("Waiting attachment cannot be removed by cleanup")
         } catch InvoiceStore.StoreError.draftChanged { }
     }
 
+    /// Exercises the full recovery path from container refresh through a retried upload.
     func testAwaitingAttachmentsResumeAfterContainerRefreshAndRetryExactUploadAfterReopen() async throws {
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -516,7 +527,8 @@ final class InvoiceCreationOutboxTests: XCTestCase {
         let original = try makePlan()
         var content = original.content
         content.container = nil
-        let prepared = try InvoiceAttachment.prepare(name: "proof.pdf", bytes: Data("%PDF-1.7\nfixture".utf8))
+        // Prepare file metadata and bytes using the same path as a local import.
+        let prepared = try InvoiceAttachmentFile.prepare(name: "proof.pdf", bytes: Data("%PDF-1.7\nfixture".utf8))
         let legacy = InvoiceAttachment(id: prepared.attachment.id, name: "  proof.pdf  ", mimeType: prepared.attachment.mimeType,
             size: prepared.attachment.size, digest: prepared.attachment.digest)
         let file = (attachment: legacy, bytes: prepared.bytes)
@@ -553,7 +565,8 @@ final class InvoiceCreationOutboxTests: XCTestCase {
         try await InvoiceAttachmentUploader(client: client, store: reopened).synchronize()
         XCTAssertEqual(CreationProtocol.paths, ["/v1/invoices/\(invoiceID)/documents", "/v1/invoices/\(invoiceID)/documents"])
         XCTAssertEqual(CreationProtocol.bodies[0], CreationProtocol.bodies[1])
-        XCTAssertEqual(CreationProtocol.bodies[0], try file.attachment.multipart(bytes: file.bytes))
+        // Compare the queued upload with the multipart body for this attachment identity.
+        XCTAssertEqual(CreationProtocol.bodies[0], try InvoiceAttachmentUpload.encode(file.attachment, bytes: file.bytes))
         let completed = try await reopened.invoiceAttachments(draftID: draft.id)
         XCTAssertEqual(completed.first?.state, .completed)
         try await reopened.saveDownloaded([assigned])
@@ -561,12 +574,14 @@ final class InvoiceCreationOutboxTests: XCTestCase {
         XCTAssertTrue(noReplay.isEmpty)
     }
 
+    /// Checks that imported filenames match the server normalization rules.
     func testAttachmentNamesMatchAPINormalizationAndRejectInvalidNames() throws {
         let bytes = Data("%PDF-1.7\nfixture".utf8)
-        let file = try InvoiceAttachment.prepare(name: "  proof.pdf  ", bytes: bytes)
+        // Prepare file metadata and bytes using the same path as a local import.
+        let file = try InvoiceAttachmentFile.prepare(name: "  proof.pdf  ", bytes: bytes)
         XCTAssertEqual(file.attachment.name, "proof.pdf")
         for name in [" ", ".", "..", String(repeating: "a\u{0301}", count: 101) + ".pdf"] {
-            XCTAssertThrowsError(try InvoiceAttachment.prepare(name: name, bytes: bytes))
+            XCTAssertThrowsError(try InvoiceAttachmentFile.prepare(name: name, bytes: bytes))
         }
     }
 
@@ -577,7 +592,7 @@ final class InvoiceCreationOutboxTests: XCTestCase {
         let original = try makePlan()
         var content = original.content
         content.container = nil
-        let file = try InvoiceAttachment.prepare(name: "photo.png", bytes: Data([137, 80, 78, 71, 13, 10, 26, 10, 1]))
+        let file = try InvoiceAttachmentFile.prepare(name: "photo.png", bytes: Data([137, 80, 78, 71, 13, 10, 26, 10, 1]))
         let draft = try await store.stageAttachment(file.attachment, bytes: file.bytes, draftID: UUID(), content: content, expectedRevision: nil)
         let operation = try await store.queueInvoiceCreation(draftID: draft.id, expectedRevision: draft.revision,
             plan: InvoiceCreationPlan(content: draft.content, branch: original.branch))
@@ -609,7 +624,7 @@ final class InvoiceCreationOutboxTests: XCTestCase {
         try await store.reconcileInvoiceReservations([replacement, reservation], lowThreshold: 10)
 
         let plan = try makePlan()
-        let editor = InvoiceDraftEditorModel(initialContent: plan.content, store: store,
+        let editor = InvoiceDraftEditorViewModel(initialContent: plan.content, store: store,
             currentBranchID: { 1 }, financialPermission: { $0 == .createInvoice }, isAuthorized: { true })
         await editor.load()
         XCTAssertEqual(editor.nextInvoiceNumber, reservation.number)
@@ -653,7 +668,7 @@ final class InvoiceCreationOutboxTests: XCTestCase {
 
         let (client, session) = try makeClient([])
         defer { session.invalidateAndCancel() }
-        let model = InvoiceListModel(client: client, store: store)
+        let model = InvoiceListViewModel(client: client, store: store)
         var query = InvoiceListQuery()
         query.scope = .unsynced
         await model.load(query: query, online: true)
@@ -667,7 +682,7 @@ final class InvoiceCreationOutboxTests: XCTestCase {
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = try await open(directory)
-        let editor = InvoiceDraftEditorModel(store: store, currentBranchID: { 1 },
+        let editor = InvoiceDraftEditorViewModel(store: store, currentBranchID: { 1 },
             financialPermission: { [.createInvoice, .recordPayment].contains($0) }, isAuthorized: { true })
         editor.content = try makePlan(payment: "5").content
         await editor.load()
@@ -693,7 +708,7 @@ final class InvoiceCreationOutboxTests: XCTestCase {
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = try await open(directory)
-        let editor = InvoiceDraftEditorModel(store: store, currentBranchID: { 1 },
+        let editor = InvoiceDraftEditorViewModel(store: store, currentBranchID: { 1 },
             financialPermission: { $0 == .createInvoice }, isAuthorized: { true })
         editor.content = try makePlan().content
         await editor.load()
@@ -908,7 +923,7 @@ final class InvoiceCreationOutboxTests: XCTestCase {
         let ordinary = try await store.saveDraft(id: UUID(), content: makePlan().content, expectedRevision: nil)
         let visible = try await store.draftSummaries(assignedOnly: true)
         XCTAssertEqual(visible.map(\.id), [saved.id])
-        let editor = InvoiceDraftEditorModel(assignedOnlyAccess: true, draftID: saved.id, store: store,
+        let editor = InvoiceDraftEditorViewModel(assignedOnlyAccess: true, draftID: saved.id, store: store,
             canViewCustomers: { true }, currentBranchID: { 1 }, financialPermission: { $0 == .createInvoice }, isAuthorized: { true })
         await editor.load()
         XCTAssertTrue(editor.isAvailable)
@@ -918,7 +933,7 @@ final class InvoiceCreationOutboxTests: XCTestCase {
         XCTAssertEqual(editor.content.senderName, content.senderName)
         XCTAssertNil(editor.content.container)
         XCTAssertNil(editor.content.pickupSource)
-        let denied = InvoiceDraftEditorModel(assignedOnlyAccess: true, draftID: ordinary.id, store: store, isAuthorized: { true })
+        let denied = InvoiceDraftEditorViewModel(assignedOnlyAccess: true, draftID: ordinary.id, store: store, isAuthorized: { true })
         await denied.load()
         XCTAssertFalse(denied.isAvailable)
         var changed = content

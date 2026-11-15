@@ -156,7 +156,7 @@ final class InvoiceEditTests: XCTestCase {
         let client = try APIClient(baseURL: URL(string: "https://api.example.test/v1")!) { _ in
             APICredentials(sessionID: sessionID, userID: "user", companyID: "company", idToken: "fixture-token")
         }
-        let editor = InvoiceItemEditorModel(invoiceID: invoiceID, client: client, store: store, isAuthorized: { true })
+        let editor = InvoiceItemEditorViewModel(invoiceID: invoiceID, client: client, store: store, isAuthorized: { true })
         await editor.load()
         editor.setName("My box", itemID: itemID)
         let latest = try newerFixture()

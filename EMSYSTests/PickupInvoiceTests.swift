@@ -26,7 +26,7 @@ final class PickupInvoiceTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = try await InvoiceStore.open(directory: directory, userID: "user", companyID: "company")
         let content = try PickupInvoicePrefill.content(from: fixture(), receiverID: "000000000000000000000002")
-        let editor = InvoiceDraftEditorModel(initialContent: content, store: store, isAuthorized: { true })
+        let editor = InvoiceDraftEditorViewModel(initialContent: content, store: store, isAuthorized: { true })
         XCTAssertTrue(editor.canSave)
         await editor.save()
         let summaries = try await store.draftSummaries()
@@ -62,7 +62,7 @@ final class PickupInvoiceTests: XCTestCase {
             XCTFail("Offline hydration must not request credentials")
             throw APIClientError.missingCredentials
         }
-        let editor = InvoiceDraftEditorModel(initialContent: initial, store: store, client: client,
+        let editor = InvoiceDraftEditorViewModel(initialContent: initial, store: store, client: client,
             canViewCustomers: { true }, isAuthorized: { true })
         await editor.loadCustomerDetails(online: false)
         XCTAssertNil(editor.customerDetailsIssue)
@@ -91,7 +91,7 @@ final class PickupInvoiceTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = try await InvoiceStore.open(directory: directory, userID: "fixture", companyID: "fixture")
         let content = try PickupInvoicePrefill.content(from: fixture(), receiverID: "000000000000000000000002")
-        let editor = InvoiceDraftEditorModel(initialContent: content, store: store, isAuthorized: { true })
+        let editor = InvoiceDraftEditorViewModel(initialContent: content, store: store, isAuthorized: { true })
         editor.content.wizardStep = .customers
         let host = UIHostingController(rootView: InvoiceDraftEditorView(model: editor)
             .environment(NetworkConnection()).environment(SynchronizationState())

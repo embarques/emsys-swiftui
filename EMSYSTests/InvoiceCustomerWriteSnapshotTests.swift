@@ -32,7 +32,7 @@ final class InvoiceCustomerWriteSnapshotTests: XCTestCase {
             XCTFail("Offline hydration must not request credentials")
             throw APIClientError.missingCredentials
         }
-        let editor = InvoiceDraftEditorModel(store: store, client: client, canViewCustomers: { true }, isAuthorized: { true })
+        let editor = InvoiceDraftEditorViewModel(store: store, client: client, canViewCustomers: { true }, isAuthorized: { true })
         editor.selectCustomer(customer, role: .sender)
         editor.content.senderAddressID = "000000000000000000000010"
         await editor.loadCustomerDetails(online: false)
@@ -73,7 +73,7 @@ final class InvoiceCustomerWriteSnapshotTests: XCTestCase {
             }
             return APICredentials(sessionID: context, userID: "user", companyID: "company", idToken: "fixture-token")
         }
-        let editor = InvoiceDraftEditorModel(store: store, client: client, canViewCustomers: { true }, isAuthorized: { true })
+        let editor = InvoiceDraftEditorViewModel(store: store, client: client, canViewCustomers: { true }, isAuthorized: { true })
         editor.selectCustomer(try JSONDecoder().decode(InvoiceCustomer.self, from: fixture()), role: .sender)
         let task = Task { await editor.loadCustomerDetails(online: true) }
         await fulfillment(of: [started], timeout: 2)

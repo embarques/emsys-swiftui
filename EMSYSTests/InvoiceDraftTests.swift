@@ -33,7 +33,7 @@ final class InvoiceDraftTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = try await InvoiceStore.open(directory: directory, userID: "user", companyID: "company")
         let saved = try await store.saveDraft(id: UUID(), content: InvoiceDraft.Content(), expectedRevision: nil)
-        let editor = InvoiceDraftEditorModel(draftID: saved.id, store: store, isAuthorized: { true })
+        let editor = InvoiceDraftEditorViewModel(draftID: saved.id, store: store, isAuthorized: { true })
         await editor.load()
         editor.content.senderName = "My unsaved sender"
         var otherContent = saved.content
@@ -99,7 +99,7 @@ final class InvoiceDraftTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = try await InvoiceStore.open(directory: directory, userID: "user", companyID: "company")
         var authorized = true
-        let editor = InvoiceDraftEditorModel(store: store, isAuthorized: { authorized })
+        let editor = InvoiceDraftEditorViewModel(store: store, isAuthorized: { authorized })
         editor.content.senderName = "Unsubmitted"
         authorized = false
         await editor.save()
@@ -108,7 +108,7 @@ final class InvoiceDraftTests: XCTestCase {
         XCTAssertTrue(empty.isEmpty)
         let saved = try await store.saveDraft(id: UUID(), content: editor.content, expectedRevision: nil)
         try await store.deleteDraft(id: saved.id, expectedRevision: saved.revision)
-        let missing = InvoiceDraftEditorModel(draftID: saved.id, store: store, isAuthorized: { true })
+        let missing = InvoiceDraftEditorViewModel(draftID: saved.id, store: store, isAuthorized: { true })
         await missing.load()
         XCTAssertFalse(missing.isLoaded)
         XCTAssertFalse(missing.canSave)

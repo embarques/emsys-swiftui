@@ -91,6 +91,31 @@ final class PickupCompletionTests: XCTestCase {
         XCTAssertTrue(operations.isEmpty)
     }
 
+    /// Verifies the detail projection keeps a hidden pickup's completion recoverable.
+    func testDetailProjectsAnActiveCompletionAndRetainsItWhenHidden() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer {
+            try? FileManager.default.removeItem(at: directory)
+        }
+        let store = try await open(directory)
+        let original = try snapshot()
+        try await store.save(original)
+        let operation = try await store.queueCompletion(id: 42, revision: original.revision)
+
+        // The screen should see the pending completion alongside the matching revision.
+        let visible = try await store.detail(id: 42)
+        XCTAssertEqual(visible.pickup?.pendingCompletion, true)
+        XCTAssertEqual(visible.completion?.id, operation.id)
+        XCTAssertEqual(visible.revision, original.revision)
+
+        // Permission loss hides the pickup without discarding its durable intent.
+        try await store.remove(id: 42)
+        let hidden = try await store.detail(id: 42)
+        XCTAssertNil(hidden.pickup)
+        XCTAssertEqual(hidden.completion?.request, operation.request)
+        XCTAssertEqual(hidden.revision, original.revision)
+    }
+
     private func open(_ directory: URL) async throws -> PickupStore {
         try await PickupStore.open(directory: directory, userID: "driver", companyID: "company")
     }

@@ -23,6 +23,7 @@ final class InvoicePoolSynchronizationTests: XCTestCase {
         let count = try await reopened.availableInvoiceReservationCount(); XCTAssertEqual(count, 0, "Only current assignment downloads can make numbers locally available")
     }
 
+    /// Verifies a rejected return stays quarantined and cannot authorize self-allocation.
     func testFailedReturnRemainsQuarantinedAndPermissionLossCannotGenerateMore() async throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -35,11 +36,17 @@ final class InvoicePoolSynchronizationTests: XCTestCase {
         try await store.stageInvoicePoolAction(action)
         let (client, session) = try makeClient([.status(403)])
         defer { session.invalidateAndCancel() }
-        do { try await InvoicePoolSynchronizer(client: client, store: store).synchronizeActions(); XCTFail("Permission denial accepted") }
-        catch APIClientError.httpStatus(403) { }
-        let count = try await store.availableInvoiceReservationCount(); XCTAssertEqual(count, 99)
-        let pending = try await store.pendingInvoicePoolActions(); XCTAssertEqual(pending.count, 1)
-        let model = InvoicePoolModel(store: store, client: client, canGenerate: { false }, isAuthorized: { true })
+        // A server denial leaves the return pending and hides its number from available choices.
+        do {
+            try await InvoicePoolSynchronizer(client: client, store: store).synchronizeActions()
+            XCTFail("Permission denial accepted")
+        } catch APIClientError.httpStatus(403) {
+            let status = try await store.invoicePoolStatus()
+            XCTAssertEqual(status.available, 99)
+            XCTAssertEqual(status.pendingCount, 1)
+            XCTAssertFalse(status.reservations.contains { $0.id == item.id })
+        }
+        let model = InvoicePoolViewModel(store: store, client: client, canGenerate: { false }, isAuthorized: { true })
         await model.generateNumbers()
         XCTAssertEqual(PoolProtocol.paths.count, 1)
     }
@@ -53,7 +60,7 @@ final class InvoicePoolSynchronizationTests: XCTestCase {
             .success(Data(#"{"success":true,"data":{"invoicePoolThreshold":0}}"#.utf8))
         ])
         defer { session.invalidateAndCancel() }
-        let model = InvoicePoolPreferenceModel(store: store, client: client, isAuthorized: { true })
+        let model = InvoicePoolPreferenceViewModel(store: store, client: client, isAuthorized: { true })
         await model.load()
         XCTAssertEqual(model.threshold, 25)
         XCTAssertFalse(model.canSave)
@@ -79,7 +86,7 @@ final class InvoicePoolSynchronizationTests: XCTestCase {
         let (client, session) = try makeClient([.failure(.notConnectedToInternet), .failure(.networkConnectionLost)])
         defer { session.invalidateAndCancel() }
         var authorized = true
-        let model = InvoicePoolPreferenceModel(store: store, client: client, isAuthorized: { authorized })
+        let model = InvoicePoolPreferenceViewModel(store: store, client: client, isAuthorized: { authorized })
         await model.load()
         XCTAssertEqual(model.threshold, 5)
         XCTAssertNotNil(model.issue)

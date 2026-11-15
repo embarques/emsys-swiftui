@@ -17,7 +17,7 @@ final class InvoiceDirectoryTests: XCTestCase {
         let client = try APIClient(baseURL: XCTUnwrap(URL(string: "https://api.example.test/v1"))) { _ in
             throw URLError(.notConnectedToInternet)
         }
-        let list = InvoiceListModel(client: client, store: store)
+        let list = InvoiceListViewModel(client: client, store: store)
         let first = try fixture(1)
         let second = try fixture(2)
         var selection = InvoiceSplitSelection()
@@ -124,7 +124,7 @@ final class InvoiceDirectoryTests: XCTestCase {
         InvoiceDirectoryProtocol.responses = [(200, try envelope(batch)), (503, Data("{}".utf8)),
             (200, try envelope([batch[49], fixture(51)]))]
         InvoiceDirectoryProtocol.requests = []
-        let model = InvoiceListModel(client: client, store: store)
+        let model = InvoiceListViewModel(client: client, store: store)
         let loader = InvoiceListLoader()
         await loader.prepare { throw URLError(.cannotOpenFile) }
         XCTAssertTrue(loader.failed)
@@ -164,7 +164,7 @@ final class InvoiceDirectoryTests: XCTestCase {
         let client = try APIClient(baseURL: XCTUnwrap(URL(string: "https://api.example.test/v1")), session: session) { _ in
             APICredentials(sessionID: identity, userID: "user", companyID: "company", idToken: "fixture")
         }
-        let model = InvoiceListModel(client: client, store: store)
+        let model = InvoiceListViewModel(client: client, store: store)
         InvoiceDirectoryProtocol.responses = []
         InvoiceDirectoryProtocol.requests = []
         InvoiceDirectoryProtocol.nextError = .notConnectedToInternet
@@ -207,7 +207,7 @@ final class InvoiceDirectoryTests: XCTestCase {
         }
         InvoiceDirectoryProtocol.responses = [(200, try envelope([fixture(3), fixture(2), fixture(1)]))]
         InvoiceDirectoryProtocol.requests = []
-        let model = InvoiceListModel(client: client, store: store)
+        let model = InvoiceListViewModel(client: client, store: store)
         let loader = InvoiceListLoader()
         let presentation = Task {
             await loader.prepare {

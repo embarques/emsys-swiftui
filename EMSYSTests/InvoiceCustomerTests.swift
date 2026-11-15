@@ -49,7 +49,7 @@ final class InvoiceCustomerTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = try await InvoiceStore.open(directory: directory, userID: "user", companyID: "company")
         let client = try makeClient()
-        let editor = InvoiceDraftEditorModel(store: store, client: client, canViewCustomers: { true }, isAuthorized: { true })
+        let editor = InvoiceDraftEditorViewModel(store: store, client: client, canViewCustomers: { true }, isAuthorized: { true })
         let sender = try customer()
         editor.selectCustomer(sender, role: .sender)
         editor.content.senderAddressID = "000000000000000000000010"
@@ -94,7 +94,7 @@ final class InvoiceCustomerTests: XCTestCase {
         let customer = try customer()
         CustomerSearchProtocol.responses = [(200, try envelope(customer))]
         CustomerSearchProtocol.requests = []
-        let model = InvoiceCustomerSearchModel(role: .sender, client: try makeClient(), store: store, isAuthorized: { true })
+        let model = InvoiceCustomerSearchViewModel(role: .sender, client: try makeClient(), store: store, isAuthorized: { true })
         model.query = "Sample"
         await model.search(online: true)
         XCTAssertEqual(model.customers, [customer])
@@ -124,10 +124,10 @@ final class InvoiceCustomerTests: XCTestCase {
         try await store.saveCustomers([customer()])
         var authorized = true
         let client = try makeClient()
-        let search = InvoiceCustomerSearchModel(role: .sender, client: client, store: store, isAuthorized: { authorized })
+        let search = InvoiceCustomerSearchViewModel(role: .sender, client: client, store: store, isAuthorized: { authorized })
         await search.search(online: false)
         XCTAssertFalse(search.customers.isEmpty)
-        let editor = InvoiceDraftEditorModel(store: store, client: client, canViewCustomers: { authorized }, isAuthorized: { true })
+        let editor = InvoiceDraftEditorViewModel(store: store, client: client, canViewCustomers: { authorized }, isAuthorized: { true })
         authorized = false
         await search.search(online: true)
         XCTAssertTrue(search.customers.isEmpty)
@@ -140,7 +140,7 @@ final class InvoiceCustomerTests: XCTestCase {
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = try await InvoiceStore.open(directory: directory, userID: "user", companyID: "company")
-        let editor = InvoiceDraftEditorModel(store: store, client: try makeClient(), canViewCustomers: { true }, isAuthorized: { true })
+        let editor = InvoiceDraftEditorViewModel(store: store, client: try makeClient(), canViewCustomers: { true }, isAuthorized: { true })
         let first = "000000000000000000000010"
         let second = "000000000000000000000011"
         for role in [InvoiceCustomer.Role.sender, .receiver] {
@@ -171,7 +171,7 @@ final class InvoiceCustomerTests: XCTestCase {
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = try await InvoiceStore.open(directory: directory, userID: "user", companyID: "company")
-        let editor = InvoiceDraftEditorModel(store: store, client: try makeClient(), canViewCustomers: { true }, isAuthorized: { true })
+        let editor = InvoiceDraftEditorViewModel(store: store, client: try makeClient(), canViewCustomers: { true }, isAuthorized: { true })
         for role in [InvoiceCustomer.Role.sender, .receiver] {
             let full = try customer(id: role == .sender ? "000000000000000000000001" : "000000000000000000000002", role: role.rawValue)
             let snapshot = try JSONDecoder().decode(InvoiceCustomerWriteSnapshot.self, from: JSONEncoder().encode(full))

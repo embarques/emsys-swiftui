@@ -1,56 +1,78 @@
 import Foundation
 
 extension AuthenticationSession {
-    func invoicePoolPreference() async throws -> InvoicePoolPreferenceModel {
+    /// Creates the warning threshold editor for the current invoice scope.
+    func invoicePoolPreference() async throws -> InvoicePoolPreferenceViewModel {
         let context = contextID
         let access = try await invoiceAccess(allowAssignedCreation: true)
-        guard contextID == context else { throw APIClientError.sessionChanged }
-        return InvoicePoolPreferenceModel(store: access.store, client: access.client,
+        guard contextID == context else {
+            throw APIClientError.sessionChanged
+        }
+        return InvoicePoolPreferenceViewModel(store: access.store, client: access.client,
             isAuthorized: { self.contextID == context && self.phase == .signedIn })
     }
 
+    /// Resolves whether the session has full or assigned-pickup creation access.
     var pickupInvoiceAccess: PickupInvoiceAccess? {
-        guard canViewPickups else { return nil }
+        guard canViewPickups else {
+            return nil
+        }
         return PickupInvoiceAccess(canCreateInvoices: canCreateInvoices,
             canCreateAssignedInvoices: canCreateAssignedPickupInvoices)
     }
 
+    /// Checks that a pickup invoice operation still has the grant it started with.
     private func canUsePickupInvoiceAccess(_ required: PickupInvoiceAccess, context: UUID) -> Bool {
         contextID == context && pickupInvoiceAccess?.permits(required) == true
     }
 
     /// Assigned creation retains narrow authority; ordinary invoice views stay protected.
-    func pickupInvoiceEditor(_ pickup: Pickup, receiverID: String?) async throws -> InvoiceDraftEditorModel {
-        guard let requiredAccess = pickupInvoiceAccess else { throw AuthenticationIssue.authorization }
+    func pickupInvoiceEditor(_ pickup: Pickup, receiverID: String?) async throws -> InvoiceDraftEditorViewModel {
+        guard let requiredAccess = pickupInvoiceAccess else {
+            throw AuthenticationIssue.authorization
+        }
         let context = contextID
         let access = try await invoiceAccess(allowAssignedCreation: true)
-        guard canUsePickupInvoiceAccess(requiredAccess, context: context) else { throw APIClientError.sessionChanged }
+        guard canUsePickupInvoiceAccess(requiredAccess, context: context) else {
+            throw APIClientError.sessionChanged
+        }
         let pickupAccess = try await pickupAccess()
         var initial: InvoiceDraft.Content
+        // Validate and cache the server-provided pickup context before opening the editor.
         do {
             let query = receiverID.map { [URLQueryItem(name: "receiverId", value: $0)] } ?? []
             let prepared = try await pickupAccess.client.get("pickups/\(pickup.id)/invoice-context",
                 queryItems: query, as: PickupInvoiceContext.self)
-            guard canUsePickupInvoiceAccess(requiredAccess, context: context) else { throw APIClientError.sessionChanged }
+            guard canUsePickupInvoiceAccess(requiredAccess, context: context) else {
+                throw APIClientError.sessionChanged
+            }
             try await pickupAccess.store.saveInvoiceContext(prepared, pickup: pickup, receiverID: receiverID)
             initial = try prepared.content(from: pickup, receiverID: receiverID)
         } catch {
-            guard canUsePickupInvoiceAccess(requiredAccess, context: context) else { throw APIClientError.sessionChanged }
+            guard canUsePickupInvoiceAccess(requiredAccess, context: context) else {
+                throw APIClientError.sessionChanged
+            }
             if AuthenticationSession.permitsOfflineRestoration(error),
                let cached = try await pickupAccess.store.invoiceContext(pickup: pickup, receiverID: receiverID) {
                 initial = try cached.content(from: pickup, receiverID: receiverID)
             } else if case APIClientError.httpStatus(let status) = error, (status == 404 || status == 405), canCreateInvoices {
                 // Older APIs retain the existing full-authority workflow.
                 initial = try PickupInvoicePrefill.content(from: pickup, receiverID: receiverID)
-            } else { throw error }
+            } else {
+                throw error
+            }
         }
-        guard canUsePickupInvoiceAccess(requiredAccess, context: context) else { throw APIClientError.sessionChanged }
+        guard canUsePickupInvoiceAccess(requiredAccess, context: context) else {
+            throw APIClientError.sessionChanged
+        }
         let assignedOnly = requiredAccess.assignedOnly
         if assignedOnly {
-            guard let sender = initial.senderCustomer else { throw APIClientError.invalidResponse }
+            guard let sender = initial.senderCustomer else {
+                throw APIClientError.invalidResponse
+            }
             initial.assignedPickup = InvoiceAssignedPickup(pickupID: pickup.id, senderID: sender.id, receiverID: initial.receiverCustomer?.id)
         }
-        return InvoiceDraftEditorModel(assignedOnlyAccess: assignedOnly, initialContent: initial, store: access.store, client: access.client,
+        return InvoiceDraftEditorViewModel(assignedOnlyAccess: assignedOnly, initialContent: initial, store: access.store, client: access.client,
             canViewItemCatalog: { self.contextID == context && (self.permissions?.contains("canViewSettings", resourceType: "settings") == true || self.canCreateAssignedPickupInvoices) },
             canViewCustomers: { self.contextID == context && self.canViewCustomers },
             canReviewPolicies: { self.contextID == context && (self.canReviewInvoicePolicies || self.canCreateAssignedPickupInvoices) },
@@ -64,23 +86,39 @@ extension AuthenticationSession {
             financialPermission: { self.canUsePickupInvoiceAccess(requiredAccess, context: context) && ($0 == .createInvoice || $0.isGranted(by: self.permissions)) },
             isAuthorized: { self.canUsePickupInvoiceAccess(requiredAccess, context: context) })
     }
-    func pickupInvoices(_ pickupID: UInt32) async throws -> PickupInvoicesModel {
-        guard let requiredAccess = pickupInvoiceAccess else { throw AuthenticationIssue.authorization }
+    /// Reads invoice numbers for the visible pickups under the current user and tenant.
+    func pickupInvoiceNumbers(pickupIDs: [UInt32]) async throws -> [UInt32: [String]] {
+        let access = try await invoiceAccess(allowAssignedCreation: true)
+        return try await access.store.pickupInvoiceNumbers(pickupIDs: pickupIDs)
+    }
+
+    /// Creates the linked-invoice screen for an authorized pickup.
+    func pickupInvoices(_ pickupID: UInt32) async throws -> PickupInvoicesViewModel {
+        guard let requiredAccess = pickupInvoiceAccess else {
+            throw AuthenticationIssue.authorization
+        }
         let context = contextID
         let access = try await invoiceAccess(allowAssignedCreation: true)
-        guard canUsePickupInvoiceAccess(requiredAccess, context: context) else { throw APIClientError.sessionChanged }
-        return PickupInvoicesModel(pickupID: pickupID, store: access.store, client: access.client,
+        guard canUsePickupInvoiceAccess(requiredAccess, context: context) else {
+            throw APIClientError.sessionChanged
+        }
+        return PickupInvoicesViewModel(pickupID: pickupID, store: access.store, client: access.client,
             isAuthorized: { self.canUsePickupInvoiceAccess(requiredAccess, context: context) },
             canEdit: { self.contextID == context && self.canUpdateInvoices })
     }
 
-    func pickupInvoiceDrafts() async throws -> InvoiceDraftListModel {
-        guard let requiredAccess = pickupInvoiceAccess else { throw AuthenticationIssue.authorization }
+    /// Creates an invoice draft list constrained to the operator’s pickup permissions.
+    func pickupInvoiceDrafts() async throws -> InvoiceDraftListViewModel {
+        guard let requiredAccess = pickupInvoiceAccess else {
+            throw AuthenticationIssue.authorization
+        }
         let context = contextID
         let assignedOnly = requiredAccess.assignedOnly
         let access = try await invoiceAccess(allowAssignedCreation: true)
-        guard canUsePickupInvoiceAccess(requiredAccess, context: context) else { throw APIClientError.sessionChanged }
-        return InvoiceDraftListModel(canGeneratePool: { self.contextID == context && self.permissions?.contains("canGenerateOwnInvoicePool", resourceType: "invoice_pool_self") == true }, assignedOnly: assignedOnly, store: access.store, client: access.client,
+        guard canUsePickupInvoiceAccess(requiredAccess, context: context) else {
+            throw APIClientError.sessionChanged
+        }
+        return InvoiceDraftListViewModel(canGeneratePool: { self.contextID == context && self.permissions?.contains("canGenerateOwnInvoicePool", resourceType: "invoice_pool_self") == true }, assignedOnly: assignedOnly, store: access.store, client: access.client,
             canViewItemCatalog: { self.contextID == context && (self.canCreateAssignedPickupInvoices || self.permissions?.contains("canViewSettings", resourceType: "settings") == true) },
             canViewCustomers: { self.contextID == context && !assignedOnly && self.canViewCustomers },
             canReviewPolicies: { self.contextID == context && (self.canCreateAssignedPickupInvoices || self.canReviewInvoicePolicies) },

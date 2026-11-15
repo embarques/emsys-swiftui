@@ -152,7 +152,7 @@ final class InvoicePoolTests: XCTestCase {
     func testLowPoolStateAndGenerationPermissionAndNativeLayout() async throws {
         let (store, _) = try await fixture()
         _ = try await seed(store)
-        let model = InvoicePoolModel(store: store, client: nil, canGenerate: { false }, isAuthorized: { true })
+        let model = InvoicePoolViewModel(store: store, client: nil, canGenerate: { false }, isAuthorized: { true })
         await model.load()
         XCTAssertEqual(model.available, 1); XCTAssertTrue(model.isLow); XCTAssertFalse(model.canGenerateNumbers)
         await model.generateNumbers()
@@ -176,7 +176,7 @@ final class InvoicePoolTests: XCTestCase {
 
     func testMobileGenerationUsesExplicitSelfActionEvenForAdministrators() async throws {
         let (store, _) = try await fixture()
-        let model = InvoicePoolModel(store: store, client: nil, canGenerate: { true }, isAuthorized: { true })
+        let model = InvoicePoolViewModel(store: store, client: nil, canGenerate: { true }, isAuthorized: { true })
         await model.generateNumbers()
         let pending = try await store.pendingInvoicePoolActions()
         let action = try XCTUnwrap(pending.first)
