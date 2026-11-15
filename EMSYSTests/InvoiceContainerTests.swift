@@ -48,7 +48,7 @@ final class InvoiceContainerTests: XCTestCase {
         let first = (100...139).reversed().map { fixture(UInt32($0)) }
         ContainerLookupProtocol.responses = [(200, try envelope(first)), (500, Data())]
         ContainerLookupProtocol.requests = []
-        let model = InvoiceContainerSearchViewModel(client: try makeClient(), store: store, isAuthorized: { true })
+        let model = InvoiceContainerSearchViewModel(repository: InvoiceDraftRepository(store: store, client: try makeClient()), store: store, isAuthorized: { true })
         model.query = "Ship"
         await model.search(online: true)
         XCTAssertEqual(model.containers, first)
@@ -82,7 +82,7 @@ final class InvoiceContainerTests: XCTestCase {
         try await store.saveContainers([fixture(67)])
         ContainerLookupProtocol.requests = []
         var authorized = true
-        let model = InvoiceContainerSearchViewModel(client: try makeClient(), store: store, isAuthorized: { authorized })
+        let model = InvoiceContainerSearchViewModel(repository: InvoiceDraftRepository(store: store, client: try makeClient()), store: store, isAuthorized: { authorized })
         await model.search(online: false)
         XCTAssertEqual(model.containers, [fixture(67)])
         XCTAssertTrue(model.isShowingDownloaded)

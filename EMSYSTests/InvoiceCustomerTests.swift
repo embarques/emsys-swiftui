@@ -94,7 +94,7 @@ final class InvoiceCustomerTests: XCTestCase {
         let customer = try customer()
         CustomerSearchProtocol.responses = [(200, try envelope(customer))]
         CustomerSearchProtocol.requests = []
-        let model = InvoiceCustomerSearchViewModel(role: .sender, client: try makeClient(), store: store, isAuthorized: { true })
+        let model = InvoiceCustomerSearchViewModel(role: .sender, repository: InvoiceDraftRepository(store: store, client: try makeClient()), store: store, isAuthorized: { true })
         model.query = "Sample"
         await model.search(online: true)
         XCTAssertEqual(model.customers, [customer])
@@ -124,7 +124,7 @@ final class InvoiceCustomerTests: XCTestCase {
         try await store.saveCustomers([customer()])
         var authorized = true
         let client = try makeClient()
-        let search = InvoiceCustomerSearchViewModel(role: .sender, client: client, store: store, isAuthorized: { authorized })
+        let search = InvoiceCustomerSearchViewModel(role: .sender, repository: InvoiceDraftRepository(store: store, client: client), store: store, isAuthorized: { authorized })
         await search.search(online: false)
         XCTAssertFalse(search.customers.isEmpty)
         let editor = InvoiceDraftEditorViewModel(store: store, client: client, canViewCustomers: { authorized }, isAuthorized: { true })

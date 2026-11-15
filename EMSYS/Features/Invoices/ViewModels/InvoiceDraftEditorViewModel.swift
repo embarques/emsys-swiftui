@@ -971,10 +971,10 @@ final class InvoiceDraftEditorViewModel: Identifiable {
 
     /// Creates a payment review scoped to the current branch and session.
     func paymentReviewModel() -> InvoicePaymentReviewViewModel? {
-        guard canOpenPaymentReview, let client else {
+        guard canOpenPaymentReview, let draftRepository else {
             return nil
         }
-        return InvoicePaymentReviewViewModel(client: client, store: store,
+        return InvoicePaymentReviewViewModel(repository: draftRepository, store: store,
             isAuthorized: { [isAuthorized, canReviewPayments] in isAuthorized() && canReviewPayments() }, currentBranchID: currentBranchID)
     }
 
@@ -1006,11 +1006,11 @@ final class InvoiceDraftEditorViewModel: Identifiable {
 
     /// Opens the assignment choices appropriate for the selected pickup source.
     func assignmentPicker() -> InvoiceAssignmentPickerViewModel? {
-        guard canChooseAssignment, let client, let source = content.pickupSource else {
+        guard canChooseAssignment, let draftRepository, let source = content.pickupSource else {
             return nil
         }
         let permission: InvoiceAssignmentPermission = source == .route ? .routes : .employees
-        return InvoiceAssignmentPickerViewModel(source: source, client: client, store: store,
+        return InvoiceAssignmentPickerViewModel(source: source, repository: draftRepository, store: store,
             isAuthorized: { [isAuthorized, canViewAssignments] in isAuthorized() && canViewAssignments(permission) },
             canViewBranches: { [isAuthorized, canViewAssignments] in isAuthorized() && canViewAssignments(.branches) })
     }
@@ -1036,10 +1036,10 @@ final class InvoiceDraftEditorViewModel: Identifiable {
 
     /// Opens the authorized container catalog search.
     func containerSearch() -> InvoiceContainerSearchViewModel? {
-        guard canChooseContainer, let client else {
+        guard canChooseContainer, let draftRepository else {
             return nil
         }
-        return InvoiceContainerSearchViewModel(client: client, store: store,
+        return InvoiceContainerSearchViewModel(repository: draftRepository, store: store,
             isAuthorized: { [isAuthorized, canViewContainers] in isAuthorized() && canViewContainers() })
     }
 
@@ -1094,10 +1094,10 @@ final class InvoiceDraftEditorViewModel: Identifiable {
 
     /// Opens a customer lookup for the requested invoice party role.
     func customerSearch(role: InvoiceCustomer.Role) -> InvoiceCustomerSearchViewModel? {
-        guard canChooseCustomers, let client else {
+        guard canChooseCustomers, let draftRepository else {
             return nil
         }
-        return InvoiceCustomerSearchViewModel(role: role, client: client, store: store,
+        return InvoiceCustomerSearchViewModel(role: role, repository: draftRepository, store: store,
             isAuthorized: { [isAuthorized, canViewCustomers] in isAuthorized() && canViewCustomers() })
     }
 

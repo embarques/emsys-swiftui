@@ -17,9 +17,9 @@ final class InvoiceCustomerSearchViewModel: Identifiable {
     @ObservationIgnored private let isAuthorized: () -> Bool
 
     /// Opens the customer picker with the current session and offline store.
-    init(role: InvoiceCustomer.Role, client: APIClient, store: InvoiceStore, isAuthorized: @escaping () -> Bool) {
+    init(role: InvoiceCustomer.Role, repository: InvoiceDraftRepository, store: InvoiceStore, isAuthorized: @escaping () -> Bool) {
         self.role = role
-        self.repository = InvoiceDraftRepository(store: store, client: client)
+        self.repository = repository
         self.store = store
         self.isAuthorized = isAuthorized
     }
