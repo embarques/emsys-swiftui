@@ -11,8 +11,9 @@ struct InvoiceDraftField: View {
     @Binding var text: String
     var input: Input = .text
     var selection: Binding<TextSelection?>?
-    var emphasizesValue = false
+    var usesProminentNumber = false
 
+    /// Builds the native editor, applying text selection when requested.
     @ViewBuilder
     private var editor: some View {
         let axis: Axis = input == .text ? .vertical : .horizontal
@@ -39,13 +40,19 @@ struct InvoiceDraftField: View {
 
     /// Shows the field label and editor with the correct input controls.
     var body: some View {
-        VStack(alignment: .leading, spacing: AppStyle.Spacing.small) {
-            Text(title).font(.subheadline).foregroundStyle(.secondary)
+        // Keep the numeric label near its value while preserving the standard text field spacing.
+        let spacing = usesProminentNumber ? 2 : AppStyle.Spacing.small
+        let editorFont: Font = usesProminentNumber
+            ? .title3.weight(.semibold).monospacedDigit()
+            : .body.weight(.medium)
+        VStack(alignment: .leading, spacing: spacing) {
+            Text(title)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             editor
-                .font(emphasizesValue ? .title2.weight(.semibold).monospacedDigit() : .body.weight(.medium))
-                .multilineTextAlignment(emphasizesValue ? .trailing : .leading)
-                .frame(minHeight: emphasizesValue ? 44 : nil)
+                .font(editorFont)
+                .frame(minHeight: usesProminentNumber ? 36 : nil)
                 .textFieldStyle(.plain)
                 .accessibilityLabel(Text(title))
                 #if os(iOS)
@@ -54,11 +61,5 @@ struct InvoiceDraftField: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, 6)
-        .padding(.horizontal, emphasizesValue ? AppStyle.Spacing.small : 0)
-        .background {
-            if emphasizesValue {
-                RoundedRectangle(cornerRadius: 8).strokeBorder(.quaternary)
-            }
-        }
     }
 }

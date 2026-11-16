@@ -10,6 +10,7 @@ struct AppRootView: View {
     @State private var compactColumn: NavigationSplitViewColumn = .sidebar
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
+    /// Selects the signed-in experience or the account screen for the current session.
     var body: some View {
         Group {
             if session.phase == .signedIn {
@@ -17,7 +18,6 @@ struct AppRootView: View {
             } else {
                 NavigationStack {
                     accountContent
-                        .connectionStatus()
                         .toolbar {
                             NavigationLink { SettingsView() } label: {
                                 Label(AppDestination.settings.title, systemImage: AppDestination.settings.systemImageName)
@@ -67,6 +67,7 @@ struct AppRootView: View {
         }
     }
 
+    /// Builds the platform navigation for signed-in destinations.
     @ViewBuilder
     private var applicationNavigation: some View {
         #if os(iOS)
@@ -78,7 +79,6 @@ struct AppRootView: View {
             } else {
                 NavigationStack {
                     destinationContent(destination)
-                        .connectionStatus()
                 }
             }
         }
@@ -89,7 +89,6 @@ struct AppRootView: View {
         } detail: {
             NavigationStack {
                 destinationContent(selectedDestination ?? .invoices)
-                    .connectionStatus()
             }
             .id(selectedDestination)
         }

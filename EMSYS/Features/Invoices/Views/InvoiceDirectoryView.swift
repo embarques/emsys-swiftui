@@ -55,6 +55,8 @@ struct InvoiceDirectoryView: View {
     var body: some View {
         List {
             Group {
+                // Let account-wide status scroll with the directory rows.
+                ConnectionStatusView()
                 // Keep reservation messages aligned with the directory's content.
                 if let poolWarning {
                     poolWarning.padding(.bottom, AppStyle.Spacing.small)

@@ -4,7 +4,6 @@ struct InvoiceDraftItemFields: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @FocusState private var isPriceFocused: Bool
     @State private var priceSelection: TextSelection?
-    @State private var expandedOptions = false
     @Binding var item: InvoiceDraft.Item
     @Binding var priceFocusRequest: UUID?
     let canChooseCatalogItems: Bool
@@ -13,16 +12,22 @@ struct InvoiceDraftItemFields: View {
     var usesMobileLayout = false
     var canRemove = true
 
+    /// Returns the line total calculated by the draft’s existing rules.
     private var lineTotal: Double? { try? InvoiceDraftAmounts(items: [item]).lineTotals[item.id] }
 
+    /// Shows the editable quantity with its numeric keyboard.
     private var quantityField: some View {
-        InvoiceDraftField(title: "invoices.quantity", text: $item.quantity, input: .decimal, emphasizesValue: usesMobileLayout)
+        InvoiceDraftField(title: "invoices.quantity", text: $item.quantity, input: .decimal, usesProminentNumber: usesMobileLayout)
     }
+    /// Shows the unit price and responds to catalog-driven focus requests.
     private var priceField: some View {
-        InvoiceDraftField(title: "drafts.unitPrice", text: $item.unitPrice, input: .decimal, selection: $priceSelection, emphasizesValue: usesMobileLayout)
+        InvoiceDraftField(title: "drafts.unitPrice", text: $item.unitPrice, input: .decimal, selection: $priceSelection, usesProminentNumber: usesMobileLayout)
             .focused($isPriceFocused)
             .onChange(of: priceFocusRequest, initial: true) {
-                guard priceFocusRequest == item.id else { return }
+                // Apply the request only to the item whose price was populated.
+                guard priceFocusRequest == item.id else {
+                    return
+                }
                 if isPriceFocused {
                     selectPrice()
                 } else {
@@ -30,103 +35,67 @@ struct InvoiceDraftItemFields: View {
                 }
             }
             .onChange(of: isPriceFocused) {
-                if isPriceFocused, priceFocusRequest == item.id { selectPrice() }
+                // Wait for the native field to accept focus before selecting its text.
+                if isPriceFocused, priceFocusRequest == item.id {
+                    selectPrice()
+                }
             }
     }
+    /// Selects the unit price for quick replacement after a catalog choice.
     private func selectPrice() {
         let price = item.unitPrice
         priceSelection = TextSelection(range: price.startIndex..<price.endIndex)
         priceFocusRequest = nil
     }
 
-    private var labelsField: some View {
-        InvoiceDraftField(title: "drafts.labelCount", text: $item.labelCount, input: .integer)
-    }
-    private var totalField: some View {
-        InvoiceDraftField(title: "drafts.totalOverride", text: $item.total, input: .decimal)
-    }
-
-    /// Shows invoice item details and numeric fields for the available width.
+    /// Shows the item description, quantity, unit price, and total.
     var body: some View {
         Section {
-            if usesMobileLayout {
-                mobileFields
-            } else {
-                itemHeader
-                descriptionField
-                if dynamicTypeSize.isAccessibilitySize {
-                    VStack(alignment: .leading, spacing: 12) {
-                        quantityField
-                        priceField
-                        labelsField
-                        totalField
-                    }
-                } else {
-                    Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 12) {
-                        // Keep both numeric pairs on separate rows at this width.
-                        GridRow(alignment: .top) {
-                            quantityField
-                            priceField
-                        }
-                        GridRow(alignment: .top) {
-                            labelsField
-                            totalField
-                        }
-                    }
-                }
-                if canRemove {
-                    removeButton
-                }
-            }
-        }
-    }
-
-    /// Shows compact item fields with expandable label and total options.
-    private var mobileFields: some View {
-        Group {
             descriptionField
-            let layout = dynamicTypeSize.isAccessibilitySize
-                ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
-                : AnyLayout(HStackLayout(alignment: .bottom, spacing: 8))
-            layout {
-                quantityField
-                priceField
-            }
-            if let lineTotal {
-                LabeledContent("invoices.total") {
-                    Text(lineTotal, format: .number.precision(.fractionLength(2)))
-                        .font(.title3.bold()).monospacedDigit()
-                }
-            }
-            DisclosureGroup("drafts.itemOptions", isExpanded: $expandedOptions) {
-                labelsField
-                totalField
-            }
-            .onChange(of: item.labelCount, initial: true) { _, count in
-                if !count.isEmpty { expandedOptions = true }
-            }
-            .onChange(of: item.total, initial: true) { _, total in
-                if !total.isEmpty { expandedOptions = true }
-            }
-            if canRemove {
+            numericFields
+            totalRow
+        }
+
+        // Give the destructive action a separate native row below the editable fields.
+        if canRemove {
+            Section {
                 removeButton
             }
         }
     }
 
-    private var itemHeader: some View {
-        HStack(alignment: .firstTextBaseline) {
-            Label("invoiceWizard.item", systemImage: "shippingbox")
-                .font(.headline).foregroundStyle(.tint)
-            Spacer(minLength: AppStyle.Spacing.small)
-            if let lineTotal {
-                Text(lineTotal, format: .number.precision(.fractionLength(2)))
-                    .font(.title3.bold()).monospacedDigit()
-                    .accessibilityLabel(Text("invoices.total"))
-                    .accessibilityValue(Text(lineTotal, format: .number.precision(.fractionLength(2))))
+    /// Arranges the numeric inputs in two columns, with room to stack large text.
+    @ViewBuilder
+    private var numericFields: some View {
+        // Switch to separate rows when the labels and values need the full width.
+        if dynamicTypeSize.isAccessibilitySize {
+            quantityField
+            priceField
+        } else {
+            HStack(alignment: .center, spacing: AppStyle.Spacing.medium) {
+                quantityField
+                Divider().frame(height: 36)
+                priceField
             }
         }
-        .padding(.vertical, 6)
+    }
+
+    /// Keeps the line total in a consistent position while the fields are edited.
+    private var totalRow: some View {
+        LabeledContent {
+            // Show a placeholder until the existing invoice rules can calculate the total.
+            if let lineTotal {
+                Text(lineTotal, format: .number.precision(.fractionLength(2)))
+                    .font(.headline.monospacedDigit())
+                    .foregroundStyle(.primary)
+            } else {
+                Text("—")
+                    .foregroundStyle(.secondary)
+            }
+        } label: {
+            Text("invoices.total")
+                .font(.subheadline.weight(.semibold))
+        }
     }
 
     /// Places the catalog picker beside the editable description.
@@ -136,8 +105,10 @@ struct InvoiceDraftItemFields: View {
             // Preserve manual entry when the user lacks catalog access.
             if canChooseCatalogItems {
                 Button(action: choose) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.title2)
+                    Image(systemName: "plus")
+                        .font(.body.weight(.semibold))
+                        .frame(width: 32, height: 32)
+                        .background(Color.accentColor.opacity(0.12), in: .circle)
                         .frame(minWidth: 44, minHeight: 44)
                 }
                 .buttonStyle(.plain)
@@ -147,9 +118,13 @@ struct InvoiceDraftItemFields: View {
         }
     }
 
+    /// Presents the destructive action with a full-width touch target.
     private var removeButton: some View {
         Button(role: .destructive, action: remove) {
-            Label("drafts.removeItem", systemImage: "trash").frame(minHeight: usesMobileLayout ? 44 : 36)
+            Label("drafts.removeItem", systemImage: "trash")
+                .foregroundStyle(.red)
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                .contentShape(Rectangle())
         }
     }
 }

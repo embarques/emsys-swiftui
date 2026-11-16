@@ -6,6 +6,7 @@ struct InvoiceItemEditorView: View {
     @State var model: InvoiceItemEditorViewModel
     @State private var confirmsDiscard = false
 
+    /// Presents the authorized item editor and handles draft submission.
     var body: some View {
         NavigationStack {
             Group {
@@ -17,7 +18,6 @@ struct InvoiceItemEditorView: View {
             }
             .formStyle(.grouped)
             .navigationTitle("invoiceEdits.editorTitle")
-            .connectionStatus()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("invoiceEdits.cancel") {
