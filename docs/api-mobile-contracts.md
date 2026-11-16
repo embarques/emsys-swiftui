@@ -209,9 +209,9 @@ The portal's `invoice-form.tsx` loads `useItemPicker`; its
 `invoice-line-item-description-combobox.tsx` searches catalog names, newest first,
 and permits free text. Selecting a catalog entry in `invoice-line-items-editor.tsx`
 copies its description and two-decimal default price, preserving quantity, labels,
-and a manually overridden total. The native wizard follows those rules with a
-searchable native sheet launched from each existing item card. The invoice draft
-and creation request retain the merchandise description text, never a numeric
+and a manually overridden total. The native wizard uses a searchable sheet for catalog
+selection and manual description entry. Confirming a description clears and
+focuses the price field for manual entry. The invoice draft and creation request retain the merchandise description text, never a numeric
 catalog identity in place of that text.
 
 The existing API is `GET /invoice-descriptions`, with `page`, `limit`, and

@@ -836,16 +836,17 @@ final class InvoiceDraftEditorViewModel: Identifiable {
         return content.items
     }
 
-    /// Applies a catalog choice to the form's local copy of an item.
-    func applyingCatalogItem(_ selected: InvoiceCatalogItem, to item: InvoiceDraft.Item) -> InvoiceDraft.Item? {
-        // A permission change while the catalog is open must prevent selection.
-        guard canChooseCatalogItems, selected.isValid else {
+    /// Applies a confirmed description and clears the price for manual entry.
+    func applyingDescription(_ description: String, to item: InvoiceDraft.Item) -> InvoiceDraft.Item? {
+        // Recheck draft access and reject blank descriptions if the form has become stale.
+        let name = description.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard isAvailable, isLoaded, !isSaving, creation == nil, !name.isEmpty else {
             return nil
         }
-        // Leave quantity, labels and a manually supplied total as entered.
+        // Preserve quantity, labels, and manual totals already saved in the draft.
         var updated = item
-        updated.name = selected.name
-        updated.unitPrice = selected.formattedPrice
+        updated.name = name
+        updated.unitPrice = ""
         return updated
     }
 

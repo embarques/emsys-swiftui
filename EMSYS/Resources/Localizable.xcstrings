@@ -1497,6 +1497,22 @@
         }
       }
     },
+    "drafts.price" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Price"
+          }
+        },
+        "es-DO" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Precio"
+          }
+        }
+      }
+    },
     "drafts.removeItem" : {
       "localizations" : {
         "en" : {
@@ -1590,22 +1606,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Borradores"
-          }
-        }
-      }
-    },
-    "drafts.unitPrice" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Unit price"
-          }
-        },
-        "es-DO" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Precio unitario"
           }
         }
       }
@@ -5951,13 +5951,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Choose catalog description"
+            "value" : "Select"
           }
         },
         "es-DO" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Seleccionar descripción del catálogo"
+            "value" : "Seleccionar"
           }
         }
       }
@@ -5968,13 +5968,29 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No matching descriptions. You can type a description in the item."
+            "value" : "No matching descriptions."
           }
         },
         "es-DO" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No hay descripciones que coincidan. Puedes escribir una descripción en el artículo."
+            "value" : "No hay descripciones que coincidan."
+          }
+        }
+      }
+    },
+    "itemCatalog.enterDescription" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Type a description"
+          }
+        },
+        "es-DO" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Escribe una descripción"
           }
         }
       }

@@ -3,27 +3,29 @@ import XCTest
 
 @MainActor
 final class InvoiceItemCatalogTests: XCTestCase {
-    /// Verifies catalog selection stays local until committed and preserves manual values.
-    func testSelectionPreservesQuantityLabelsAndManualTotalAndDraftSurvivesReopen() async throws {
+    /// Verifies a confirmed description and new price can be saved without losing existing overrides.
+    func testDescriptionPreservesQuantityLabelsAndManualTotalAndDraftSurvivesReopen() async throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = try await InvoiceStore.open(directory: directory, userID: "user", companyID: "company")
         var allowed = true
         let editor = InvoiceDraftEditorViewModel(store: store, canViewItemCatalog: { allowed }, isAuthorized: { true })
         let row = InvoiceDraft.Item(name: "Typed", quantity: "3", unitPrice: "2", labelCount: "2", total: "25")
-        let selected = InvoiceCatalogItem(id: 7, name: "CAJA GRANDE", price: 12.5, createdAt: nil)
 
-        // A fresh draft displays an empty list, and previewing a catalog item leaves it empty.
+        // A confirmed description is applied to the pending line and the old price is cleared.
         XCTAssertTrue(editor.listedItems.isEmpty)
-        var pending = try XCTUnwrap(editor.applyingCatalogItem(selected, to: row))
+        var pending = try XCTUnwrap(editor.applyingDescription("CAJA GRANDE", to: row))
         XCTAssertTrue(editor.listedItems.isEmpty)
         XCTAssertEqual(pending.name, "CAJA GRANDE")
-        XCTAssertEqual(pending.unitPrice, "12.50")
+        XCTAssertTrue(pending.unitPrice.isEmpty)
         XCTAssertEqual(pending.quantity, "3")
         XCTAssertEqual(pending.labelCount, "2")
         XCTAssertEqual(pending.total, "25")
 
-        // Committing the first line replaces the starter and persists the configured fields.
+        // The user must enter a price before committing the newly selected description.
+        XCTAssertFalse(editor.saveItem(pending, replacing: nil))
+        XCTAssertTrue(editor.listedItems.isEmpty)
+        pending.unitPrice = "12.50"
         XCTAssertTrue(editor.saveItem(pending, replacing: nil))
         let original = pending
         XCTAssertEqual(editor.content.items, [original])
@@ -41,9 +43,12 @@ final class InvoiceItemCatalogTests: XCTestCase {
         XCTAssertFalse(editor.saveItem(pending, replacing: original))
         XCTAssertEqual(editor.content.items, [pending])
 
-        // Revoking catalog permission blocks new selections without discarding the line.
+        // A blank description is rejected, and manual input remains available without catalog permission.
         allowed = false
-        XCTAssertNil(editor.applyingCatalogItem(selected, to: pending))
+        XCTAssertNil(editor.applyingDescription("   ", to: pending))
+        let manual = try XCTUnwrap(editor.applyingDescription("  Artículo especial  ", to: pending))
+        XCTAssertEqual(manual.name, "Artículo especial")
+        XCTAssertTrue(manual.unitPrice.isEmpty)
         XCTAssertEqual(editor.content.items, [pending])
     }
 

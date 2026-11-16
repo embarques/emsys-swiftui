@@ -26,7 +26,7 @@ final class InvoiceWizardLayoutTests: XCTestCase {
 
     #if os(iOS)
     /// Checks catalog price focus and preserves saved overrides when editing the visible fields.
-    func testCatalogPriceFocusSelectsTheWholePriceInTheRequestedRow() async throws {
+    func testCatalogDescriptionFocusesTheEmptyPriceField() async throws {
         // Set up two lines, including an older line with a custom label count and total.
         let fixture = ItemPriceFocusFixture()
         let host = UIHostingController(rootView: Form {
@@ -34,7 +34,7 @@ final class InvoiceWizardLayoutTests: XCTestCase {
                 // Bind each form section to its corresponding draft line.
                 @Bindable var fixture = fixture
                 InvoiceDraftItemFields(item: $fixture.items[index], priceFocusRequest: $fixture.request,
-                    canChooseCatalogItems: true, choose: {}, remove: {}, usesMobileLayout: UIDevice.current.userInterfaceIdiom == .phone)
+                    chooseDescription: {}, remove: {}, usesMobileLayout: UIDevice.current.userInterfaceIdiom == .phone)
             }
         })
         // Host the fields in a native window so the numeric keyboard can take focus.
@@ -49,26 +49,25 @@ final class InvoiceWizardLayoutTests: XCTestCase {
             previous?.makeKey()
         }
 
-        // Simulate picking a catalog item and give the price field time to select its value.
+        // Simulate picking a catalog item and wait for the empty price field to receive native focus.
         try await Task.sleep(for: .milliseconds(300))
-        fixture.items[0].unitPrice = "12.50"
+        fixture.items[0].unitPrice = ""
         fixture.request = fixture.items[0].id
         for _ in 0..<20 {
-            if fixture.request == nil {
+            if fixture.request == nil, focusedTextInput(in: host.view) != nil {
                 break
             }
             try await Task.sleep(for: .milliseconds(50))
         }
 
-        // Capture the compact fields with the price selected and keyboard visible.
+        // Confirm the focused field is empty and ready for new numeric input.
         let input = try XCTUnwrap(focusedTextInput(in: host.view))
         XCTAssertEqual((input as? UITextField)?.keyboardType, .decimalPad)
-        let selection = try XCTUnwrap(input.selectedTextRange)
-        XCTAssertEqual(input.text(in: selection), "12.50")
+        XCTAssertFalse(input.hasText)
         XCTAssertNil(fixture.request)
         try capture(window, name: "item-fields")
 
-        // Replacing the selected price must preserve the second line and legacy overrides.
+        // Entering the new price must preserve the second line and legacy overrides.
         input.insertText("7")
         try await Task.sleep(for: .milliseconds(100))
         XCTAssertEqual(fixture.items[0].unitPrice, "7")
@@ -77,6 +76,42 @@ final class InvoiceWizardLayoutTests: XCTestCase {
         XCTAssertEqual(fixture.items[0].total, "30")
         let amounts = try InvoiceDraftAmounts(items: [fixture.items[0]])
         XCTAssertEqual(amounts.subtotal, 30)
+    }
+
+    /// Renders the native description picker with manual entry and a preloaded catalog.
+    func testNativeDescriptionPickerRendersManualEntryAndCachedDescriptions() async throws {
+        // Seed the same local catalog used when the app is offline.
+        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try await InvoiceStore.open(directory: directory, userID: "fixture", companyID: "fixture")
+        let catalog = [
+            InvoiceCatalogItem(id: 1, name: "Caja de ropa", price: 25, createdAt: nil),
+            InvoiceCatalogItem(id: 2, name: "Barril", price: 80, createdAt: nil),
+        ]
+        try await store.saveItemCatalog(catalog)
+        let model = InvoiceDraftEditorViewModel(store: store, canViewItemCatalog: { true }, isAuthorized: { true })
+        await model.loadItemCatalog(online: false)
+        XCTAssertEqual(Set(model.catalogItems.map(\.name)), Set(catalog.map(\.name)))
+
+        // Capture a picker with an existing manual description ready to edit.
+        let picker = InvoiceItemDescriptionPicker(model: model, description: "Artículo especial") { _ in
+            XCTFail("Displaying the picker must not confirm its description")
+        }
+        let host = UIHostingController(rootView: picker
+            .environment(NetworkConnection())
+            .environment(\.locale, Locale(identifier: "es-DO")))
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let previous = scene.windows.first(where: \.isKeyWindow)
+        let window = UIWindow(windowScene: scene)
+        window.frame = scene.effectiveGeometry.coordinateSpace.bounds
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        defer {
+            window.isHidden = true
+            previous?.makeKey()
+        }
+        try await Task.sleep(for: .milliseconds(400))
+        try capture(window, name: "description-picker")
     }
 
     private func focusedTextInput(in view: UIView) -> (any UITextInput)? {

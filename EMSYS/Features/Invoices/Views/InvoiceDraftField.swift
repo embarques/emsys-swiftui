@@ -10,18 +10,12 @@ struct InvoiceDraftField: View {
     let title: LocalizedStringKey
     @Binding var text: String
     var input: Input = .text
-    var selection: Binding<TextSelection?>?
     var usesProminentNumber = false
 
-    /// Builds the native editor, applying text selection when requested.
-    @ViewBuilder
+    /// Uses a wrapping editor for text and a single line for numeric input.
     private var editor: some View {
         let axis: Axis = input == .text ? .vertical : .horizontal
-        if let selection {
-            TextField(title, text: $text, selection: selection, axis: axis)
-        } else {
-            TextField(title, text: $text, axis: axis)
-        }
+        return TextField(title, text: $text, axis: axis)
     }
 
     #if os(iOS)

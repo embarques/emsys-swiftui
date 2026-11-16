@@ -4,9 +4,9 @@ import SwiftUI
 struct InvoiceDraftItemForm: View {
     @Environment(\.dismiss) private var dismiss
     @State private var item: InvoiceDraft.Item
-    @State private var showsCatalog = false
+    @State private var showsDescriptionPicker = false
     @State private var priceFocusRequest: UUID?
-    @State private var catalogPriceSelected = false
+    @State private var didConfirmDescription = false
     @State private var saveFailed = false
 
     private let model: InvoiceDraftEditorViewModel
@@ -22,7 +22,7 @@ struct InvoiceDraftItemForm: View {
         _item = State(initialValue: item)
     }
 
-    /// Presents the existing item fields, catalog picker, and commit controls.
+    /// Presents the item fields, description picker, and commit controls.
     var body: some View {
         NavigationStack {
             Form {
@@ -33,8 +33,7 @@ struct InvoiceDraftItemForm: View {
                 InvoiceDraftItemFields(
                     item: $item,
                     priceFocusRequest: $priceFocusRequest,
-                    canChooseCatalogItems: model.canChooseCatalogItems,
-                    choose: { showsCatalog = true },
+                    chooseDescription: { showsDescriptionPicker = true },
                     remove: removeItem,
                     usesMobileLayout: usesMobileLayout,
                     canRemove: original != nil
@@ -53,8 +52,8 @@ struct InvoiceDraftItemForm: View {
                     Button("drafts.finishItem", action: saveItem)
                 }
             }
-            .sheet(isPresented: $showsCatalog, onDismiss: focusSelectedPrice) {
-                InvoiceItemCatalogView(model: model, onSelect: selectCatalogItem)
+            .sheet(isPresented: $showsDescriptionPicker, onDismiss: focusPriceAfterDescriptionDismissal) {
+                InvoiceItemDescriptionPicker(model: model, description: item.name, onConfirm: applyDescription)
             }
         }
         #if os(macOS)
@@ -62,22 +61,21 @@ struct InvoiceDraftItemForm: View {
         #endif
     }
 
-    /// Copies the selected description and price into the pending edit.
-    private func selectCatalogItem(_ selected: InvoiceCatalogItem) {
-        // Only move focus after an authorized catalog selection has been applied.
-        if let updated = model.applyingCatalogItem(selected, to: item) {
+    /// Updates the pending description and prepares the empty price field for entry.
+    private func applyDescription(_ description: String) {
+        // Only request price focus after the draft accepts the new description.
+        if let updated = model.applyingDescription(description, to: item) {
             item = updated
-            catalogPriceSelected = true
+            didConfirmDescription = true
         }
-        showsCatalog = false
     }
 
-    /// Selects the populated unit price once the picker has closed.
-    private func focusSelectedPrice() {
-        // Dismissing the catalog without a selection leaves focus alone.
-        if catalogPriceSelected {
+    /// Focuses the price when a confirmed description picker closes.
+    private func focusPriceAfterDescriptionDismissal() {
+        // Cancel and swipe dismissal leave the original description and price in place.
+        if didConfirmDescription {
             priceFocusRequest = item.id
-            catalogPriceSelected = false
+            didConfirmDescription = false
         }
     }
 
