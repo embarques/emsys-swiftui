@@ -10,8 +10,6 @@ nonisolated struct InvoiceCatalogItem: Codable, Identifiable, Equatable, Sendabl
         id > 0 && !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && price.isFinite && price >= 0
     }
 
-    var formattedPrice: String { String(format: "%.2f", locale: Locale(identifier: "en_US_POSIX"), price) }
-
     static func matching(_ items: [Self], query: String) -> [Self] {
         let term = query.trimmingCharacters(in: .whitespacesAndNewlines)
         return items.filter {

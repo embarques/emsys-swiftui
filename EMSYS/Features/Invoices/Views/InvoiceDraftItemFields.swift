@@ -3,11 +3,9 @@ import SwiftUI
 struct InvoiceDraftItemFields: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @FocusState private var isPriceFocused: Bool
-    @State private var priceSelection: TextSelection?
     @Binding var item: InvoiceDraft.Item
     @Binding var priceFocusRequest: UUID?
-    let canChooseCatalogItems: Bool
-    let choose: () -> Void
+    let chooseDescription: () -> Void
     let remove: () -> Void
     var usesMobileLayout = false
     var canRemove = true
@@ -19,33 +17,22 @@ struct InvoiceDraftItemFields: View {
     private var quantityField: some View {
         InvoiceDraftField(title: "invoices.quantity", text: $item.quantity, input: .decimal, usesProminentNumber: usesMobileLayout)
     }
-    /// Shows the unit price and responds to catalog-driven focus requests.
+    /// Shows the price and focuses it when the description picker confirms.
     private var priceField: some View {
-        InvoiceDraftField(title: "drafts.unitPrice", text: $item.unitPrice, input: .decimal, selection: $priceSelection, usesProminentNumber: usesMobileLayout)
-            .focused($isPriceFocused)
-            .onChange(of: priceFocusRequest, initial: true) {
-                // Apply the request only to the item whose price was populated.
-                guard priceFocusRequest == item.id else {
-                    return
-                }
-                if isPriceFocused {
-                    selectPrice()
-                } else {
-                    isPriceFocused = true
-                }
+        InvoiceDraftField(
+            title: "drafts.price",
+            text: $item.unitPrice,
+            input: .decimal,
+            usesProminentNumber: usesMobileLayout
+        )
+        .focused($isPriceFocused)
+        .onChange(of: priceFocusRequest, initial: true) {
+            // A request belongs only to the item whose description was selected.
+            if priceFocusRequest == item.id {
+                isPriceFocused = true
+                priceFocusRequest = nil
             }
-            .onChange(of: isPriceFocused) {
-                // Wait for the native field to accept focus before selecting its text.
-                if isPriceFocused, priceFocusRequest == item.id {
-                    selectPrice()
-                }
-            }
-    }
-    /// Selects the unit price for quick replacement after a catalog choice.
-    private func selectPrice() {
-        let price = item.unitPrice
-        priceSelection = TextSelection(range: price.startIndex..<price.endIndex)
-        priceFocusRequest = nil
+        }
     }
 
     /// Shows the item description, quantity, unit price, and total.
@@ -98,24 +85,35 @@ struct InvoiceDraftItemFields: View {
         }
     }
 
-    /// Places the catalog picker beside the editable description.
+    /// Opens the description picker from a full-width row with the current value.
     private var descriptionField: some View {
-        HStack(alignment: .center, spacing: AppStyle.Spacing.small) {
-            InvoiceDraftField(title: "invoiceEdits.description", text: $item.name)
-            // Preserve manual entry when the user lacks catalog access.
-            if canChooseCatalogItems {
-                Button(action: choose) {
-                    Image(systemName: "plus")
-                        .font(.body.weight(.semibold))
-                        .frame(width: 32, height: 32)
-                        .background(Color.accentColor.opacity(0.12), in: .circle)
-                        .frame(minWidth: 44, minHeight: 44)
+        // Stack the title and value when larger text needs more horizontal room.
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: AppStyle.Spacing.small))
+            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: AppStyle.Spacing.medium))
+        let value = item.name.isEmpty ? Text("itemCatalog.choose") : Text(item.name)
+        return Button {
+            // Release the keyboard before presenting the picker.
+            isPriceFocused = false
+            chooseDescription()
+        } label: {
+            HStack(spacing: AppStyle.Spacing.medium) {
+                layout {
+                    Text("invoiceEdits.description").foregroundStyle(.primary)
+                    value.foregroundStyle(.tint)
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(.tint)
-                .accessibilityLabel(Text("itemCatalog.choose"))
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.forward")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
             }
+            .frame(minHeight: 44, alignment: .leading)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text("invoiceEdits.description"))
+        .accessibilityValue(value)
     }
 
     /// Presents the destructive action with a full-width touch target.
