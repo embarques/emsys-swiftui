@@ -25,39 +25,58 @@ final class InvoiceWizardLayoutTests: XCTestCase {
     }
 
     #if os(iOS)
+    /// Checks catalog price focus and preserves saved overrides when editing the visible fields.
     func testCatalogPriceFocusSelectsTheWholePriceInTheRequestedRow() async throws {
+        // Set up two lines, including an older line with a custom label count and total.
         let fixture = ItemPriceFocusFixture()
         let host = UIHostingController(rootView: Form {
             ForEach(fixture.items.indices, id: \.self) { index in
+                // Bind each form section to its corresponding draft line.
                 @Bindable var fixture = fixture
                 InvoiceDraftItemFields(item: $fixture.items[index], priceFocusRequest: $fixture.request,
-                    canChooseCatalogItems: true, choose: {}, remove: {}, usesMobileLayout: true)
+                    canChooseCatalogItems: true, choose: {}, remove: {}, usesMobileLayout: UIDevice.current.userInterfaceIdiom == .phone)
             }
         })
+        // Host the fields in a native window so the numeric keyboard can take focus.
         let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let previous = scene.windows.first(where: \.isKeyWindow)
         let window = UIWindow(windowScene: scene)
+        window.frame = scene.effectiveGeometry.coordinateSpace.bounds
         window.rootViewController = host
         window.makeKeyAndVisible()
-        defer { window.isHidden = true; previous?.makeKey() }
+        defer {
+            window.isHidden = true
+            previous?.makeKey()
+        }
 
+        // Simulate picking a catalog item and give the price field time to select its value.
         try await Task.sleep(for: .milliseconds(300))
         fixture.items[0].unitPrice = "12.50"
         fixture.request = fixture.items[0].id
         for _ in 0..<20 {
-            if fixture.request == nil { break }
+            if fixture.request == nil {
+                break
+            }
             try await Task.sleep(for: .milliseconds(50))
         }
 
+        // Capture the compact fields with the price selected and keyboard visible.
         let input = try XCTUnwrap(focusedTextInput(in: host.view))
         XCTAssertEqual((input as? UITextField)?.keyboardType, .decimalPad)
         let selection = try XCTUnwrap(input.selectedTextRange)
         XCTAssertEqual(input.text(in: selection), "12.50")
         XCTAssertNil(fixture.request)
+        try capture(window, name: "item-fields")
+
+        // Replacing the selected price must preserve the second line and legacy overrides.
         input.insertText("7")
         try await Task.sleep(for: .milliseconds(100))
         XCTAssertEqual(fixture.items[0].unitPrice, "7")
         XCTAssertEqual(fixture.items[1].unitPrice, "80")
+        XCTAssertEqual(fixture.items[0].labelCount, "2")
+        XCTAssertEqual(fixture.items[0].total, "30")
+        let amounts = try InvoiceDraftAmounts(items: [fixture.items[0]])
+        XCTAssertEqual(amounts.subtotal, 30)
     }
 
     private func focusedTextInput(in view: UIView) -> (any UITextInput)? {
@@ -152,7 +171,10 @@ final class InvoiceWizardLayoutTests: XCTestCase {
 @MainActor
 @Observable
 private final class ItemPriceFocusFixture {
-    var items: [InvoiceDraft.Item] = [.init(unitPrice: "25"), .init(unitPrice: "80")]
+    var items: [InvoiceDraft.Item] = [
+        .init(name: "Caja de ropa", unitPrice: "25", labelCount: "2", total: "30"),
+        .init(name: "Barril", unitPrice: "80"),
+    ]
     var request: UUID?
 }
 #endif

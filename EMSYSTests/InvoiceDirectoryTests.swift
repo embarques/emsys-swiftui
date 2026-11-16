@@ -252,13 +252,17 @@ final class InvoiceDirectoryTests: XCTestCase {
     }
 
     #if os(macOS)
+    /// Renders a healthy directory across widths, appearances, and text sizes.
     func testNativeDirectoryRendersCompactDarkAndLightAndLargeText() async throws {
         let invoices = try [fixture(120), fixture(119), fixture(118)]
         for (width, scheme, size, name) in [(390, ColorScheme.dark, DynamicTypeSize.large, "dark"),
             (320, .light, .large, "compact"), (390, .dark, .accessibility2, "large-text")] {
+            // Supply a healthy connection and sync state for the inline status row.
             let content = InvoiceDirectoryView(query: .constant(.init()), invoices: invoices,
                 outstandingBalance: 600, isLoading: false, isDownloaded: true, hasMore: true, issue: nil,
                 showFilters: {}, open: { _ in }, printInvoice: { _ in }, more: {}, retry: {}, refresh: {})
+                .environment(NetworkConnection())
+                .environment(SynchronizationState())
                 .environment(\.locale, Locale(identifier: "en"))
                 .environment(\.colorScheme, scheme).environment(\.dynamicTypeSize, size)
                 .frame(width: CGFloat(width), height: 844)
@@ -284,6 +288,7 @@ final class InvoiceDirectoryTests: XCTestCase {
     #endif
 
     #if os(iOS)
+    /// Renders a local invoice with its own review status in the unsynced directory.
     func testNativeUnsyncedDirectoryRendersTheLocalInvoiceAndItsStatus() async throws {
         var query = InvoiceListQuery()
         query.scope = .unsynced
@@ -291,10 +296,14 @@ final class InvoiceDirectoryTests: XCTestCase {
         let entry = LocalInvoiceListEntry(id: id.uuidString, draftID: id, number: "INV-26-001452",
             senderName: "Cliente de prueba", receiverName: "", date: "2026-11-06",
             container: nil, state: .needsReview, invoice: nil)
+        // A local invoice can require review independently of the account-wide status.
         let host = UIHostingController(rootView: InvoiceDirectoryView(query: .constant(query), invoices: [],
             localEntries: [entry], outstandingBalance: 0, isLoading: false, isDownloaded: false,
             hasMore: false, issue: nil, showFilters: {}, open: { _ in }, printInvoice: nil,
-            more: {}, retry: {}, refresh: {}).environment(\.locale, Locale(identifier: "es-DO")))
+            more: {}, retry: {}, refresh: {})
+            .environment(NetworkConnection())
+            .environment(SynchronizationState())
+            .environment(\.locale, Locale(identifier: "es-DO")))
         let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let previous = scene.windows.first(where: \.isKeyWindow)
         let window = UIWindow(windowScene: scene)

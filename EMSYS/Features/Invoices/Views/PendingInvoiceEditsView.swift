@@ -6,6 +6,7 @@ struct PendingInvoiceEditsView: View {
     @Environment(\.dismiss) private var dismiss
     @State var model: PendingInvoiceEditsViewModel
 
+    /// Presents pending invoice edits with their review and retry controls.
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
@@ -42,7 +43,6 @@ struct PendingInvoiceEditsView: View {
                 }
             }
             .navigationTitle("invoiceEdits.pendingTitle")
-            .connectionStatus()
             .toolbar {
                 Button("sync.now") { synchronization.requestUpload() }
                     .disabled(synchronization.isRunning || connection.status == .unavailable || !model.isAvailable)

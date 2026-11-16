@@ -8,6 +8,7 @@ struct InvoiceDraftListView: View {
     @State private var editor: InvoiceDraftEditorViewModel?
     @State private var draftToDelete: InvoiceDraftSummary?
 
+    /// Presents saved drafts and their invoice-number controls.
     var body: some View {
         NavigationStack {
             Group {
@@ -25,7 +26,6 @@ struct InvoiceDraftListView: View {
                         .disabled(!model.isAvailable || model.assignedOnly || model.availableReservations == 0)
                 }
             }
-            .connectionStatus()
             .task { await model.load() }
             .onChange(of: synchronization.lastFinishedAt) { Task { await model.load() } }
             .sheet(item: $pool, onDismiss: { Task { await model.load() } }) { InvoicePoolView(model: $0) }
