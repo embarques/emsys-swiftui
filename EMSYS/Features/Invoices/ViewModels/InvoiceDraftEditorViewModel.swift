@@ -825,18 +825,54 @@ final class InvoiceDraftEditorViewModel: Identifiable {
         }
     }
 
-    /// Copies a catalog item's description and price into the selected row.
-    func selectCatalogItem(_ selected: InvoiceCatalogItem, for itemID: UUID) -> Bool {
-        guard canChooseCatalogItems, selected.isValid,
-              let index = content.items.firstIndex(where: { $0.id == itemID }) else {
+    /// Returns draft lines, treating the untouched starter line as an empty list.
+    var listedItems: [InvoiceDraft.Item] {
+        // Previously saved drafts may still contain the default blank line.
+        if let starter = content.items.first,
+           content.items.count == 1,
+           starter == InvoiceDraft.Item(id: starter.id) {
+            return []
+        }
+        return content.items
+    }
+
+    /// Applies a catalog choice to the form's local copy of an item.
+    func applyingCatalogItem(_ selected: InvoiceCatalogItem, to item: InvoiceDraft.Item) -> InvoiceDraft.Item? {
+        // A permission change while the catalog is open must prevent selection.
+        guard canChooseCatalogItems, selected.isValid else {
+            return nil
+        }
+        // Leave quantity, labels and a manually supplied total as entered.
+        var updated = item
+        updated.name = selected.name
+        updated.unitPrice = selected.formattedPrice
+        return updated
+    }
+
+    /// Applies a valid line to the draft if the item being edited still matches.
+    func saveItem(_ item: InvoiceDraft.Item, replacing original: InvoiceDraft.Item?) -> Bool {
+        // Keep invalid input in the form and reject writes after access changes.
+        guard isAvailable, isLoaded, !isSaving, creation == nil,
+              (try? InvoiceDraftAmounts(items: [item])) != nil else {
             return false
         }
-        // Copy before mutation so bound rows never overlap exclusive array access.
-        var item = content.items[index]
-        item.name = selected.name
-        item.unitPrice = selected.formattedPrice
-        // Quantity, labels and a manually supplied total remain the user's values.
-        content.items[index] = item
+        // Replace an existing line in place, guarding against a stale edit.
+        if let original {
+            guard item.id == original.id, let index = content.items.firstIndex(of: original) else {
+                return false
+            }
+            content.items[index] = item
+            return true
+        }
+        // A genuine first item takes the place of the legacy blank starter.
+        if listedItems.isEmpty {
+            content.items = [item]
+        } else {
+            guard !content.items.contains(where: { $0.id == item.id }) else {
+                return false
+            }
+            content.items.append(item)
+        }
         return true
     }
 

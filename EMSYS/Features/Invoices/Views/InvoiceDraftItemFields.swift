@@ -11,6 +11,7 @@ struct InvoiceDraftItemFields: View {
     let choose: () -> Void
     let remove: () -> Void
     var usesMobileLayout = false
+    var canRemove = true
 
     private var lineTotal: Double? { try? InvoiceDraftAmounts(items: [item]).lineTotals[item.id] }
 
@@ -52,8 +53,7 @@ struct InvoiceDraftItemFields: View {
                 mobileFields
             } else {
                 itemHeader
-                InvoiceDraftField(title: "invoiceEdits.description", text: $item.name)
-                if canChooseCatalogItems { catalogButton }
+                descriptionField
                 if dynamicTypeSize.isAccessibilitySize {
                     VStack(alignment: .leading, spacing: 12) {
                         quantityField
@@ -74,15 +74,17 @@ struct InvoiceDraftItemFields: View {
                         }
                     }
                 }
-                removeButton
+                if canRemove {
+                    removeButton
+                }
             }
         }
     }
 
+    /// Shows compact item fields with expandable label and total options.
     private var mobileFields: some View {
         Group {
-            InvoiceDraftField(title: "invoiceEdits.description", text: $item.name)
-            if canChooseCatalogItems { catalogButton }
+            descriptionField
             let layout = dynamicTypeSize.isAccessibilitySize
                 ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
                 : AnyLayout(HStackLayout(alignment: .bottom, spacing: 8))
@@ -106,7 +108,9 @@ struct InvoiceDraftItemFields: View {
             .onChange(of: item.total, initial: true) { _, total in
                 if !total.isEmpty { expandedOptions = true }
             }
-            removeButton
+            if canRemove {
+                removeButton
+            }
         }
     }
 
@@ -125,10 +129,21 @@ struct InvoiceDraftItemFields: View {
         .padding(.vertical, 6)
     }
 
-    private var catalogButton: some View {
-        Button(action: choose) {
-            Label("itemCatalog.choose", systemImage: "tag")
-                .frame(minHeight: usesMobileLayout ? 44 : 36)
+    /// Places the catalog picker beside the editable description.
+    private var descriptionField: some View {
+        HStack(alignment: .center, spacing: AppStyle.Spacing.small) {
+            InvoiceDraftField(title: "invoiceEdits.description", text: $item.name)
+            // Preserve manual entry when the user lacks catalog access.
+            if canChooseCatalogItems {
+                Button(action: choose) {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.title2)
+                        .frame(minWidth: 44, minHeight: 44)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.tint)
+                .accessibilityLabel(Text("itemCatalog.choose"))
+            }
         }
     }
 
