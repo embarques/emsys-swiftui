@@ -66,7 +66,7 @@ struct IncomeRepository {
     func refreshActivity(branchID: UInt16, selectedDay: InvoiceDate?,
                          mayCreate: () -> Bool) async throws -> (day: InvoiceDate, accountsDownloaded: Bool) {
         // Interpret the server's closeout date inside the repository.
-        let closeout = try await context(branchID: branchID)
+        let closeout = try await Self.closeoutContext(client: client, branchID: branchID)
         guard let today = InvoiceDate(apiValue: closeout.today) else {
             throw APIClientError.invalidResponse
         }
@@ -97,9 +97,26 @@ struct IncomeRepository {
     }
 
     /// Loads the server's closeout dates and open statement for the branch.
-    private func context(branchID: UInt16) async throws -> CloseoutContext {
+    static func closeoutContext(client: APIClient, branchID: UInt16) async throws -> CloseoutContext {
         try await client.get("income-statements/context",
             queryItems: [.init(name: "branchId", value: String(branchID))], as: CloseoutContext.self)
+    }
+
+    /// Opens the authenticated branch's current business day using server-owned date rules.
+    static func openCloseout(client: APIClient, currency: String, rate: Double) async throws -> InvoiceIncomeStatement {
+        struct Setup: Encodable {
+            let currency: String
+            let rate: Double
+        }
+        // Send only currency and rate. The API chooses the branch and business date.
+        let body = try JSONEncoder().encode(Setup(currency: currency, rate: rate))
+        return try await client.post("income-statements", encodedBody: body,
+            capturesServerFailure: true, as: InvoiceIncomeStatement.self)
+    }
+
+    /// Opens a closeout for the Income screen.
+    func openCloseout(currency: String, rate: Double) async throws -> InvoiceIncomeStatement {
+        try await Self.openCloseout(client: client, currency: currency, rate: rate)
     }
 
     /// Refreshes a business day and keeps its journal and account data in the local period.
@@ -229,7 +246,7 @@ struct IncomeRepository {
                 needsReview = true
                 continue
             }
-            let closeout = try await context(branchID: branchID)
+            let closeout = try await Self.closeoutContext(client: client, branchID: branchID)
             guard closeout.matches(operation) else {
                 try await store.flagForReview(operation, reason: "income.periodChanged")
                 needsReview = true

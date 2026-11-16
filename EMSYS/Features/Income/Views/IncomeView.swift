@@ -8,6 +8,7 @@ struct IncomeView: View {
     @State private var selectedDay: InvoiceDate?
     @State private var entry: Entry?
     @State private var couldNotOpen = false
+    @State private var showsCloseoutSetup = false
 
     private struct Entry: Identifiable {
         let kind: IncomeJournalKind
@@ -27,15 +28,29 @@ struct IncomeView: View {
               mayCreate: session.canPrepareIncomeJournal)
     }
 
+    /// Presents branch activity and authorized closeout and journal actions.
     var body: some View {
         Group {
             if let model {
                 IncomeOverviewView(model: model, mayCreate: session.canPrepareIncomeJournal,
-                                   selectedDay: $selectedDay, retry: { await reload(model) }) { kind, statement in
+                                   selectedDay: $selectedDay, retry: { await reload(model) },
+                                   openCloseout: closeoutAction(model)) { kind, statement in
                     entry = Entry(kind: kind, statementID: statement.id)
                 }
                     .task(id: refresh) { await reload(model) }
                     .refreshable { await reload(model) }
+                    .sheet(isPresented: $showsCloseoutSetup) {
+                        // Keep the sheet tied to the branch and account that presented it.
+                        if let branch = session.user?.branch {
+                            let contextID = session.contextID
+                            IncomeCloseoutSetupView(branch: branch) { currency, rate in
+                                try await model.openToday(currency: currency, rate: rate) {
+                                    session.contextID == contextID && session.user?.branch?.id == branch.id
+                                        && session.canOpenIncomeCloseout && connection.status != .unavailable
+                                }
+                            }
+                        }
+                    }
                     .sheet(item: $entry) { entry in
                         IncomeEntryView(model: model, kind: entry.kind, statementID: entry.statementID) {
                             synchronization.requestUpload()
@@ -53,6 +68,16 @@ struct IncomeView: View {
         }
         .navigationTitle("navigation.dailyIncome")
         .task(id: session.contextID) { await prepare() }
+    }
+
+    /// Provides the open action for today's online Income view when the branch has permission.
+    private func closeoutAction(_ model: IncomeViewModel) -> (() -> Void)? {
+        // Looking at a historical day cannot open a statement for that day.
+        guard selectedDay == nil, session.canOpenIncomeCloseout, connection.status != .unavailable,
+              model.canOpenToday else {
+            return nil
+        }
+        return { showsCloseoutSetup = true }
     }
 
     private func reload(_ model: IncomeViewModel) async {
@@ -90,11 +115,13 @@ struct IncomeOverviewView: View {
     let mayCreate: Bool
     @Binding var selectedDay: InvoiceDate?
     let retry: () async -> Void
+    var openCloseout: (() -> Void)? = nil
     let openEntry: (IncomeJournalKind, InvoiceIncomeStatement) -> Void
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var attemptedEntry = false
     @State private var showsDatePicker = false
 
+    /// Renders the daily balance, available actions, and posted or queued transactions.
     var body: some View {
         List {
             Section {
@@ -107,6 +134,12 @@ struct IncomeOverviewView: View {
                     .listRowBackground(Color.clear)
             } else if attemptedEntry && mayCreate && !model.canCreate {
                 MessagePanel(message: "income.openPeriodRequired", icon: "calendar.badge.exclamationmark")
+                    .listRowBackground(Color.clear)
+            }
+            // Opening a closeout requires its own grant, independent of journal entry permissions.
+            if let openCloseout {
+                Button("invoiceCreation.closeout.open", systemImage: "calendar.badge.plus", action: openCloseout)
+                    .buttonStyle(.borderedProminent)
                     .listRowBackground(Color.clear)
             }
             if mayCreate {

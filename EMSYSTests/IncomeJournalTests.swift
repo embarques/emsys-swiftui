@@ -155,7 +155,78 @@ final class IncomeJournalTests: XCTestCase {
         XCTAssertEqual(outbox.first?.body, next.body)
     }
 
+    /// Verifies that Income can open the current branch's closeout independently of journal permissions.
+    func testIncomeOpensTodayOnlyWithPermissionAndRefreshesTheStatement() async throws {
+        // Start with a server-confirmed business day that has no open statement.
+        let (repository, directory, session) = try await fixture()
+        defer {
+            session.invalidateAndCancel()
+            try? FileManager.default.removeItem(at: directory)
+        }
+        let statement = try statement()
+        let today = try XCTUnwrap(statement.businessDate)
+        let before = try envelope(IncomeCloseoutFixture(today: today, serverTimezone: "GMT", current: nil))
+        let after = try envelope(IncomeCloseoutFixture(today: today, serverTimezone: "GMT", current: statement))
+        IncomeProtocol.stub([.body(before), .body(try envelope(statement)), .body(after), .body(try envelope([IncomeJournal]()))])
+        let model = IncomeViewModel(repository: repository, branchID: 3, isAuthorized: { true }, mayCreate: { false })
+
+        // A stale offline snapshot cannot enable opening, and denial cannot send a write.
+        await model.load(selectedDay: nil, online: false)
+        XCTAssertFalse(model.canOpenToday)
+        await model.load(selectedDay: nil, online: true)
+        XCTAssertTrue(model.canOpenToday)
+        #if os(iOS)
+        // Inspect the opening action and shared setup in the native simulator window.
+        try await captureCloseoutOpening(model)
+        #endif
+        do {
+            try await model.openToday(currency: "USD", rate: 1, isAllowed: { false })
+            XCTFail("Opening must require the closeout grant")
+        } catch APIClientError.invalidResponse { }
+        XCTAssertEqual(IncomeProtocol.requests().map(\.path), ["/v1/income-statements/context"])
+
+        // On success, the server picks the day and the screen replaces its missing-period state.
+        try await model.openToday(currency: "USD", rate: 1, isAllowed: { true })
+        XCTAssertEqual(model.period?.statement?.id, statement.id)
+        XCTAssertFalse(model.canOpenToday)
+        let requests = IncomeProtocol.requests()
+        XCTAssertEqual(requests.map(\.path), ["/v1/income-statements/context", "/v1/income-statements",
+            "/v1/income-statements/context", "/v1/journals/search"])
+        let body = try XCTUnwrap(requests[1].body)
+        let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        XCTAssertEqual(Set(payload.keys), ["currency", "rate"])
+    }
+
     #if os(iOS)
+    /// Captures the Income action and the setup shared with invoice Payment.
+    private func captureCloseoutOpening(_ model: IncomeViewModel) async throws {
+        // Render the missing-closeout state using the live overview composition.
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let previous = scene.windows.first(where: \.isKeyWindow)
+        let window = UIWindow(windowScene: scene)
+        window.frame = scene.effectiveGeometry.coordinateSpace.bounds
+        defer {
+            window.isHidden = true
+            previous?.makeKey()
+        }
+        window.rootViewController = UIHostingController(rootView: NavigationStack {
+            IncomeOverviewView(model: model, mayCreate: false, selectedDay: .constant(nil), retry: {},
+                openCloseout: {}, openEntry: { _, _ in })
+                .navigationTitle("navigation.dailyIncome")
+        }.environment(\.locale, Locale(identifier: "es-DO")))
+        window.makeKeyAndVisible()
+        try await Task.sleep(for: .milliseconds(350))
+        try capture(window, name: "open-closeout")
+
+        // Inspect the setup for a Dominican branch, where currency is selectable.
+        let branch = AuthenticatedUser.Branch(id: 3, name: "Santo Domingo", code: "RD")
+        window.rootViewController = UIHostingController(rootView: IncomeCloseoutSetupView(branch: branch) { _, _ in
+            XCTFail("Rendering the opening sheet must not submit it")
+        }.environment(\.locale, Locale(identifier: "es-DO")))
+        try await Task.sleep(for: .milliseconds(350))
+        try capture(window, name: "closeout-setup")
+    }
+
     /// Renders Ingresos and checks the decimal field used to enter a journal amount.
     func testNativeIncomeEntryFormsRenderAndFocusDecimalFieldOnPhone() async throws {
         let (service, directory, session) = try await fixture()

@@ -28,6 +28,26 @@ final class IncomeViewModel {
     var canCreate: Bool {
         isAuthorized() && mayCreate() && period?.isCurrent == true && !accounts.isEmpty
     }
+    /// Shows the opening action only after refreshing today's branch closeout.
+    var canOpenToday: Bool {
+        isAuthorized() && !isLoading && !isShowingDownloaded && period != nil && period?.currentStatementID == nil
+    }
+
+    /// Opens the server's current business day and refreshes the local journal and accounts.
+    func openToday(currency: String, rate: Double, isAllowed: () -> Bool) async throws {
+        // Recheck permission and state before issuing the server write.
+        guard canOpenToday, isAllowed(), ["USD", "DOP"].contains(currency), rate.isFinite, rate > 0 else {
+            throw APIClientError.invalidResponse
+        }
+        let statement = try await repository.openCloseout(currency: currency, rate: rate)
+        // Avoid using a statement belonging to a prior session or a different branch.
+        guard isAuthorized(), isAllowed(), !Task.isCancelled, statement.id > 0,
+              statement.isOpen, statement.branch?.id == branchID else {
+            throw APIClientError.invalidResponse
+        }
+        await load(selectedDay: nil, online: true)
+    }
+
     /// Provides the accounts downloaded with the selected period.
     var accounts: [IncomeAccount] { period?.accounts ?? [] }
     /// Provides the server currency for the selected closeout.
