@@ -30,6 +30,17 @@ struct InvoiceDraftEditorView: View {
         return usesMobileEntryLayout ? LocalizedStringKey(model.step.title) : "invoiceCreation.title"
     }
 
+    private struct PaymentCloseoutRefresh: Equatable {
+        let branchID: UInt16?
+        let connection: NetworkConnection.Status
+    }
+
+    /// Identifies the current Payment screen and its connection state.
+    private var paymentCloseoutRefresh: PaymentCloseoutRefresh {
+        let branchID = model.step == .payment && model.creation == nil ? closeoutBranch?.id : nil
+        return PaymentCloseoutRefresh(branchID: branchID, connection: connection.status)
+    }
+
     /// Presents the draft workflow and its native file picker and confirmation sheets.
     var body: some View {
         NavigationStack {
@@ -51,10 +62,10 @@ struct InvoiceDraftEditorView: View {
             .sheet(isPresented: $showsCloseoutSetup) {
                 if let session, let branch = closeoutBranch {
                     let contextID = session.contextID
-                    InvoiceCloseoutSetupView(branch: branch) { currency, rate in
+                    IncomeCloseoutSetupView(branch: branch, resumesInvoice: model.creation != nil) { currency, rate in
                         try await model.openCloseout(branch: branch, currency: currency, rate: rate) {
                             session.contextID == contextID && session.user?.branch?.id == branch.id
-                                && session.permissions?.contains("canCreateIncomeStatement", resourceType: "income_statement") == true
+                                && session.canOpenIncomeCloseout && connection.status != .unavailable
                         }
                     }
                 }
@@ -119,6 +130,12 @@ struct InvoiceDraftEditorView: View {
                     await model.loadPolicies(online: connection.status != .unavailable)
                 }
             }
+            .task(id: paymentCloseoutRefresh) {
+                // Refresh when Payment becomes visible or connectivity changes.
+                if let branchID = paymentCloseoutRefresh.branchID, connection.status != .unavailable {
+                    await model.refreshPaymentCloseout(branchID: branchID)
+                }
+            }
             .sheet(item: $customerSearch) { search in
                 InvoiceCustomerSearchView(model: search) {
                     model.selectCustomer($0, role: search.role)
@@ -152,6 +169,7 @@ struct InvoiceDraftEditorView: View {
         #endif
     }
 
+    /// Presents the fields and available actions for the current wizard step.
     private var editorForm: some View {
         Form {
             if !usesMobileEntryLayout { wizardStepHeader }
@@ -176,6 +194,16 @@ struct InvoiceDraftEditorView: View {
             case .items: invoiceItems
             case .payment:
                 if !usesMobileEntryLayout { paymentSummary }
+                // Let authorized operators open the closeout before entering a payment.
+                if closeoutBranch != nil, model.canOpenPaymentCloseout {
+                    Section {
+                        Button("invoiceCreation.closeout.open", systemImage: "calendar.badge.plus") {
+                            showsCloseoutSetup = true
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(connection.status == .unavailable || model.isCheckingPaymentCloseout)
+                    }
+                }
                 InvoicePaymentFields(model: model, usesMobileLayout: usesMobileEntryLayout)
                 paymentContext
             case .review: reviewSummary; attachmentSection; policyReview; signatureReview
@@ -472,13 +500,20 @@ struct InvoiceDraftEditorView: View {
         }
     }
 
+    /// Returns the authenticated branch when the current invoice can use its closeout.
     private var closeoutBranch: AuthenticatedUser.Branch? {
-        guard let session, let branch = session.user?.branch, let operation = model.creation,
-              let code = branch.code, !code.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              session.permissions?.contains("canCreateIncomeStatement", resourceType: "income_statement") == true,
-              operation.plan.branch.id == branch.id,
-              operation.plan.content.pickupRoute == nil || operation.plan.content.pickupRoute?.branch?.id == branch.id
-        else { return nil }
+        // Exclude routed invoices assigned to another branch.
+        guard let session, session.canOpenIncomeCloseout, let branch = session.user?.branch,
+              let code = branch.code, !code.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return nil
+        }
+        let content = model.creation?.plan.content ?? model.content
+        guard content.pickupRoute == nil || content.pickupRoute?.branch?.id == branch.id else {
+            return nil
+        }
+        if let operation = model.creation, operation.plan.branch.id != branch.id {
+            return nil
+        }
         return branch
     }
 
@@ -607,90 +642,5 @@ struct InvoiceDraftEditorView: View {
             if let issue = model.paymentLocationIssue { Text(LocalizedStringKey(issue)).foregroundStyle(.secondary) }
         }
         .disabled(!model.isLoaded || model.isSaving)
-    }
-}
-
-private struct InvoiceCloseoutSetupView: View {
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.locale) private var locale
-    let branch: AuthenticatedUser.Branch
-    let submit: (String, Double) async throws -> Void
-    @State private var currency = "USD"
-    @State private var rate = ""
-    @State private var isSubmitting = false
-    @State private var serverMessage: String?
-    @State private var failed = false
-
-    private var needsCurrency: Bool {
-        ["RD", "DR", "DO"].contains(branch.code?.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() ?? "")
-    }
-
-    private var exchangeRate: Double? {
-        if currency == "USD" { return 1 }
-        guard let value = try? Double(rate, format: .number.locale(locale)), value.isFinite, value > 0 else { return nil }
-        return value
-    }
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    Text(branch.name ?? branch.code ?? "")
-                    if needsCurrency {
-                        Picker("invoiceCreation.closeout.currency", selection: $currency) {
-                            Text(verbatim: "USD").tag("USD")
-                            Text(verbatim: "DOP").tag("DOP")
-                        }
-                        if currency == "DOP" {
-                            TextField("invoiceCreation.closeout.rate", text: $rate)
-                            #if os(iOS)
-                                .keyboardType(.decimalPad)
-                            #endif
-                        }
-                    } else {
-                        LabeledContent("invoiceCreation.closeout.currency", value: "USD")
-                        LabeledContent("invoiceCreation.closeout.rate", value: "1")
-                    }
-                } footer: {
-                    Text("invoiceCreation.closeout.resume")
-                }
-                if let serverMessage {
-                    Text(verbatim: serverMessage).foregroundStyle(.red)
-                } else if failed {
-                    Text("invoiceCreation.closeout.failed").foregroundStyle(.red)
-                }
-                Button("invoiceCreation.closeout.open") {
-                    guard let exchangeRate else { return }
-                    isSubmitting = true
-                    serverMessage = nil
-                    failed = false
-                    Task {
-                        defer { isSubmitting = false }
-                        do {
-                            try await submit(currency, exchangeRate)
-                            dismiss()
-                        } catch let error as APIServerFailure {
-                            serverMessage = error.message
-                            failed = true
-                        } catch {
-                            failed = true
-                        }
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(exchangeRate == nil || isSubmitting)
-            }
-            .formStyle(.grouped)
-            .navigationTitle("invoiceCreation.closeout.open")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("invoiceEdits.cancel") { dismiss() }.disabled(isSubmitting)
-                }
-            }
-        }
-        .interactiveDismissDisabled(isSubmitting)
-        #if os(macOS)
-        .frame(minWidth: 440, minHeight: 340)
-        #endif
     }
 }

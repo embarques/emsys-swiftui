@@ -337,19 +337,64 @@ final class InvoiceDraftEditorViewModel: Identifiable {
         }
     }
 
-    /// Opens the required closeout, then retries under the existing invoice identity.
+    private(set) var isCheckingPaymentCloseout = false
+    private var checkedPaymentCloseout: InvoiceIncomeStatement?
+    @ObservationIgnored private var paymentCloseoutCheckID = UUID()
+
+    /// Shows the opening action until an open closeout is known for the payment step.
+    var canOpenPaymentCloseout: Bool {
+        step == .payment && creation == nil && draftRepository != nil && checkedPaymentCloseout?.isOpen != true
+    }
+
+    /// Checks whether today's closeout is already open for the invoice branch.
+    func refreshPaymentCloseout(branchID: UInt16) async {
+        // Invalidate older requests so a delayed response cannot overwrite a newly opened closeout.
+        guard isAvailable, let draftRepository, creation == nil, step == .payment else {
+            return
+        }
+        let id = UUID()
+        paymentCloseoutCheckID = id
+        isCheckingPaymentCloseout = true
+        defer {
+            if paymentCloseoutCheckID == id {
+                isCheckingPaymentCloseout = false
+            }
+        }
+        do {
+            let statement = try await draftRepository.currentCloseout(branchID: branchID)
+            if paymentCloseoutCheckID == id, isAvailable, !Task.isCancelled {
+                checkedPaymentCloseout = statement
+            }
+        } catch {
+            // The server still validates the opening request for users without read access.
+            if paymentCloseoutCheckID == id, isAvailable, !Task.isCancelled {
+                checkedPaymentCloseout = nil
+            }
+        }
+    }
+
+    /// Opens today's branch closeout and resumes a saved invoice when recovering a blocked upload.
     func openCloseout(branch: AuthenticatedUser.Branch, currency: String, rate: Double,
                       isAllowed: () -> Bool) async throws {
-        // Only a blocked invoice for this branch may start closeout recovery.
-        guard isAvailable, isAllowed(), !isSaving, let draftRepository, let creation,
-              creation.failure?.requiresCloseout == true,
-              creation.plan.branch.id == branch.id,
-              creation.plan.content.pickupRoute == nil || creation.plan.content.pickupRoute?.branch?.id == branch.id,
+        // Recovery uses the saved invoice context. A new draft uses its authenticated payment branch.
+        guard isAvailable, isAllowed(), isLoaded, !isSaving, let draftRepository,
               ["USD", "DOP"].contains(currency), rate.isFinite, rate > 0 else {
             throw APIClientError.invalidResponse
         }
+        let operation = creation
+        if let operation {
+            guard operation.failure?.requiresCloseout == true, operation.plan.branch.id == branch.id,
+                  operation.plan.content.pickupRoute == nil || operation.plan.content.pickupRoute?.branch?.id == branch.id else {
+                throw APIClientError.invalidResponse
+            }
+        } else {
+            guard canOpenPaymentCloseout, currentBranchID() == branch.id,
+                  content.pickupRoute == nil || content.pickupRoute?.branch?.id == branch.id else {
+                throw APIClientError.invalidResponse
+            }
+        }
 
-        // Release the form lock before calling the normal retry action.
+        // Release the form lock before calling the standard retry action.
         let statement: InvoiceIncomeStatement
         do {
             isSaving = true
@@ -359,12 +404,17 @@ final class InvoiceDraftEditorViewModel: Identifiable {
             statement = try await draftRepository.openCloseout(currency: currency, rate: rate)
         }
 
-        // A session change or a closeout for another branch cannot authorize the retry.
+        // Ignore a response that no longer belongs to this session or branch.
         guard isAvailable, isAllowed(), !Task.isCancelled,
-              statement.isOpen, statement.branch?.id == branch.id else {
+              statement.id > 0, statement.isOpen, statement.branch?.id == branch.id else {
             throw APIClientError.invalidResponse
         }
-        await retryCreation()
+        paymentCloseoutCheckID = UUID()
+        isCheckingPaymentCloseout = false
+        checkedPaymentCloseout = statement
+        if operation != nil {
+            await retryCreation()
+        }
     }
 
     /// Renders the persisted confirmed invoice or queued draft for printing.

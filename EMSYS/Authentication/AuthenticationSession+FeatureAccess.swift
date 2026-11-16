@@ -24,6 +24,12 @@ extension AuthenticationSession {
         phase == .signedIn && AppDestination.dailyIncome.isAccessible(with: permissions)
     }
 
+    /// Checks the server grant for opening today's closeout in the signed-in branch.
+    var canOpenIncomeCloseout: Bool {
+        phase == .signedIn && (user?.branch?.id ?? 0) > 0
+            && permissions?.contains("canCreateIncomeStatement", resourceType: "income_statement") == true
+    }
+
     /// Checks whether the user can post an income or expense entry.
     var canPostIncomeJournal: Bool {
         canViewIncome && permissions?.contains("canCreateJournal", resourceType: "journal") == true

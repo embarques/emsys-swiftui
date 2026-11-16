@@ -43,17 +43,14 @@ struct InvoiceDraftRepository {
         return items
     }
 
-    /// Opens a closeout using the same request used by payment recovery.
-    func openCloseout(currency: String, rate: Double) async throws -> InvoiceIncomeStatement {
-        struct Setup: Encodable {
-            let currency: String
-            let rate: Double
-        }
+    /// Reads the current closeout for the branch responsible for payment.
+    func currentCloseout(branchID: UInt16) async throws -> InvoiceIncomeStatement? {
+        try await IncomeRepository.closeoutContext(client: client, branchID: branchID).current
+    }
 
-        // Preserve structured server failures so the editor can present the API's reason.
-        let body = try JSONEncoder().encode(Setup(currency: currency, rate: rate))
-        return try await client.post("income-statements", encodedBody: body,
-            capturesServerFailure: true, as: InvoiceIncomeStatement.self)
+    /// Opens the server's current business day for payment and invoice recovery.
+    func openCloseout(currency: String, rate: Double) async throws -> InvoiceIncomeStatement {
+        try await IncomeRepository.openCloseout(client: client, currency: currency, rate: rate)
     }
 
     /// Downloads a customer's write snapshot and keeps it for offline draft preparation.

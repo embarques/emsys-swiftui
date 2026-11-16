@@ -362,6 +362,69 @@ final class InvoiceCreationOutboxTests: XCTestCase {
         XCTAssertEqual(setup["rate"] as? Double, 1)
     }
 
+    /// Retries an earlier duplicate rejection without replacing the original reservation.
+    func testReservedPaymentRetriesOriginalProofAfterDuplicateRejection() async throws {
+        // An older journal decoder rejected the already reserved number before posting payment.
+        let directory = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try await open(directory)
+        let plan = try makePlan(payment: "5")
+        let operation = try await store.queueInvoiceCreation(draftID: UUID(), expectedRevision: nil, plan: plan)
+        let duplicate = Data(#"{"message":"Invoice already exists","data":{"code":"INVOICE_ALREADY_EXISTS"}}"#.utf8)
+        let (client, session) = try makeClient([.status(409, duplicate)])
+        defer { session.invalidateAndCancel() }
+        let uploader = InvoiceCreationUploader(client: client, store: store)
+        do {
+            try await uploader.synchronize()
+            XCTFail("The old server response must be retained for explicit retry")
+        } catch InvoiceCreationUploader.UploadError.attentionRequired { }
+
+        // Retry after the backend fix using the same request bytes and original number.
+        let editor = InvoiceDraftEditorViewModel(draftID: operation.draftID, store: store, client: client,
+            financialPermission: { $0 == .createInvoice }, isAuthorized: { true })
+        await editor.load()
+        XCTAssertEqual(editor.creation?.failure?.stage, .payment)
+        CreationProtocol.responses = [.success(receiptResponse), .success(invoiceResponse)]
+        await editor.retryCreation()
+        try await uploader.synchronize()
+        XCTAssertEqual(CreationProtocol.bodies[0], CreationProtocol.bodies[1])
+        let saved = try await store.invoiceCreation(draftID: operation.draftID)
+        XCTAssertEqual(saved?.plan.reservation, operation.plan.reservation)
+        XCTAssertEqual(saved?.state, .completed)
+    }
+
+    /// Opens today's closeout from Payment without queuing or changing the invoice draft.
+    func testPaymentOpensCloseoutBeforeInvoiceIsQueued() async throws {
+        // Begin with an editable payment step and a server response with no current closeout.
+        let directory = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try await open(directory)
+        let plan = try makePlan(payment: "5")
+        var draft = plan.content
+        draft.wizardStep = .payment
+        let missing = Data(#"{"success":true,"data":{"today":"2026-11-14","serverTimezone":"GMT"}}"#.utf8)
+        let opened = Data(#"{"success":true,"data":{"id":7,"status":"open","branch":{"id":1}}}"#.utf8)
+        let (client, session) = try makeClient([.success(missing), .success(opened)])
+        defer { session.invalidateAndCancel() }
+        let editor = InvoiceDraftEditorViewModel(initialContent: draft, store: store, client: client,
+            currentBranchID: { plan.branch.id }, isAuthorized: { true })
+        await editor.refreshPaymentCloseout(branchID: plan.branch.id)
+        XCTAssertTrue(editor.canOpenPaymentCloseout)
+
+        // Denial leaves the draft and server state alone. Confirmation only opens the closeout.
+        do {
+            try await editor.openCloseout(branch: plan.branch, currency: "USD", rate: 1, isAllowed: { false })
+            XCTFail("The payment action must respect the opening grant")
+        } catch APIClientError.invalidResponse { }
+        let before = editor.content
+        try await editor.openCloseout(branch: plan.branch, currency: "USD", rate: 1, isAllowed: { true })
+        XCTAssertEqual(editor.content, before)
+        XCTAssertFalse(editor.canOpenPaymentCloseout)
+        XCTAssertFalse(editor.didQueueCreation)
+        XCTAssertNil(editor.creation)
+        XCTAssertEqual(CreationProtocol.paths, ["/v1/income-statements/context", "/v1/income-statements"])
+    }
+
     func testMissingRouteKeepsWorkForExplicitRetryAndNeverFallsBack() async throws {
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
