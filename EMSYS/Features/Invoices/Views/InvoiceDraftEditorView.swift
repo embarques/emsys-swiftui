@@ -15,11 +15,7 @@ struct InvoiceDraftEditorView: View {
     @State private var showsCloseoutSetup = false
     @State private var showsSignature = false
     @State private var importsAttachment = false
-    @State private var catalogSelection: CatalogSelection?
-    @State private var selectedCatalogItemRow: UUID?
-    @State private var priceFocusRequest: UUID?
-
-    private struct CatalogSelection: Identifiable { let id: UUID }
+    @State private var itemBeingEdited: InvoiceDraft.Item?
 
     private var usesMobileEntryLayout: Bool {
         #if os(iOS)
@@ -131,16 +127,9 @@ struct InvoiceDraftEditorView: View {
                     Task { await model.loadCustomerDetails(online: connection.status != .unavailable) }
                 }
             }
-            .sheet(item: $catalogSelection, onDismiss: {
-                priceFocusRequest = selectedCatalogItemRow
-                selectedCatalogItemRow = nil
-            }) { selection in
-                InvoiceItemCatalogView(model: model) { selected in
-                    if model.selectCatalogItem(selected, for: selection.id) {
-                        selectedCatalogItemRow = selection.id
-                    }
-                    catalogSelection = nil
-                }
+            .sheet(item: $itemBeingEdited) { item in
+                // Keep edits in the form until the user confirms them.
+                InvoiceDraftItemForm(model: model, item: item, usesMobileLayout: usesMobileEntryLayout)
             }
             .sheet(isPresented: $showsSignature) { InvoiceSenderSignatureView(model: model) }
             .onChange(of: model.didQueueCreation) {
@@ -296,25 +285,38 @@ struct InvoiceDraftEditorView: View {
         }
     }
 
+    /// Lists the draft's items and opens the form for a new or existing line.
     private var invoiceItems: some View {
-        @Bindable var model = model
-        return Group {
-            ForEach($model.content.items) { $item in
-                let itemID = item.id
-                InvoiceDraftItemFields(item: $item, priceFocusRequest: $priceFocusRequest,
-                    canChooseCatalogItems: model.canChooseCatalogItems,
-                    choose: { catalogSelection = CatalogSelection(id: itemID) },
-                    remove: { model.removeItem(id: itemID) }, usesMobileLayout: usesMobileEntryLayout)
-                    .disabled(!model.isLoaded || model.isSaving)
-            }
+        Group {
             Section {
-                Button { model.content.items.append(InvoiceDraft.Item()) } label: {
-                    Label("drafts.addItem", systemImage: "plus.circle.fill")
-                        .frame(maxWidth: .infinity, minHeight: 44)
+                // Keep each line tappable across the full width.
+                ForEach(model.listedItems) { item in
+                    Button {
+                        itemBeingEdited = item
+                    } label: {
+                        invoiceItemRow(item)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.bordered)
-                .disabled(!model.isLoaded || model.isSaving)
+                if model.listedItems.isEmpty {
+                    Text("invoiceDetail.noItems")
+                        .foregroundStyle(.secondary)
+                }
+            } header: {
+                HStack {
+                    Text("invoices.items")
+                    Spacer()
+                    Button {
+                        itemBeingEdited = InvoiceDraft.Item()
+                    } label: {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.title2)
+                            .frame(minWidth: 44, minHeight: 44)
+                    }
+                    .accessibilityLabel(Text("drafts.addItem"))
+                }
             }
+            // Keep the wide-layout subtotal visible below the list.
             if !usesMobileEntryLayout, let amounts = model.amounts {
                 Section {
                     LabeledContent("invoiceCreation.subtotal") {
@@ -325,6 +327,48 @@ struct InvoiceDraftEditorView: View {
             }
         }
     }
+
+    /// Shows a line's description, quantity, price and calculated total.
+    private func invoiceItemRow(_ item: InvoiceDraft.Item) -> some View {
+        // Let the amount wrap below the description at larger text sizes.
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading))
+            : AnyLayout(HStackLayout(alignment: .center))
+        return HStack(spacing: AppStyle.Spacing.medium) {
+            Image(systemName: "shippingbox")
+                .foregroundStyle(.tint)
+                .accessibilityHidden(true)
+            layout {
+                VStack(alignment: .leading, spacing: 4) {
+                    if item.name.isEmpty {
+                        Text("invoiceWizard.item").font(.headline)
+                    } else {
+                        Text(item.name).font(.headline)
+                    }
+                    Text("\(item.quantity) × \(item.unitPrice)")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                // Use the same arithmetic as the item form, even alongside an incomplete line.
+                if let amount = try? InvoiceDraftAmounts(items: [item]),
+                   let total = amount.lineTotals[item.id] {
+                    Text(total, format: .number.precision(.fractionLength(2)))
+                        .monospacedDigit()
+                        .accessibilityLabel(Text("invoices.total"))
+                        .accessibilityValue(Text(total, format: .number.precision(.fractionLength(2))))
+                }
+            }
+            Image(systemName: "chevron.forward")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+        }
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+    }
+
 
     private var policyReview: some View {
         Group {

@@ -3,6 +3,7 @@ import XCTest
 
 @MainActor
 final class InvoiceItemCatalogTests: XCTestCase {
+    /// Verifies catalog selection stays local until committed and preserves manual values.
     func testSelectionPreservesQuantityLabelsAndManualTotalAndDraftSurvivesReopen() async throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -10,28 +11,40 @@ final class InvoiceItemCatalogTests: XCTestCase {
         var allowed = true
         let editor = InvoiceDraftEditorViewModel(store: store, canViewItemCatalog: { allowed }, isAuthorized: { true })
         let row = InvoiceDraft.Item(name: "Typed", quantity: "3", unitPrice: "2", labelCount: "2", total: "25")
-        editor.content.items = [row]
         let selected = InvoiceCatalogItem(id: 7, name: "CAJA GRANDE", price: 12.5, createdAt: nil)
-        XCTAssertTrue(editor.selectCatalogItem(selected, for: row.id))
-        XCTAssertEqual(editor.content.items[0].name, "CAJA GRANDE")
-        XCTAssertEqual(editor.content.items[0].unitPrice, "12.50")
-        XCTAssertEqual(editor.content.items[0].quantity, "3")
-        XCTAssertEqual(editor.content.items[0].labelCount, "2")
-        XCTAssertEqual(editor.content.items[0].total, "25")
-        editor.content.items[0].total = ""
-        XCTAssertTrue(editor.selectCatalogItem(selected, for: row.id))
+
+        // A fresh draft displays an empty list, and previewing a catalog item leaves it empty.
+        XCTAssertTrue(editor.listedItems.isEmpty)
+        var pending = try XCTUnwrap(editor.applyingCatalogItem(selected, to: row))
+        XCTAssertTrue(editor.listedItems.isEmpty)
+        XCTAssertEqual(pending.name, "CAJA GRANDE")
+        XCTAssertEqual(pending.unitPrice, "12.50")
+        XCTAssertEqual(pending.quantity, "3")
+        XCTAssertEqual(pending.labelCount, "2")
+        XCTAssertEqual(pending.total, "25")
+
+        // Committing the first line replaces the starter and persists the configured fields.
+        XCTAssertTrue(editor.saveItem(pending, replacing: nil))
+        let original = pending
+        XCTAssertEqual(editor.content.items, [original])
+        pending.total = ""
+        XCTAssertTrue(editor.saveItem(pending, replacing: original))
         XCTAssertEqual(editor.amounts?.subtotal, 37.5)
-        editor.content.items[0].name = "Custom merchandise"
         let saved = try await store.saveDraft(id: UUID(), content: editor.content, expectedRevision: nil)
         let reopened = try await store.draft(id: saved.id)
-        XCTAssertEqual(reopened?.content.items[0].name, "Custom merchandise")
+        XCTAssertEqual(reopened?.content.items, [pending])
+
+        // Invalid edits and stale edits must leave the previously committed item intact.
+        var invalid = pending
+        invalid.name = ""
+        XCTAssertFalse(editor.saveItem(invalid, replacing: pending))
+        XCTAssertFalse(editor.saveItem(pending, replacing: original))
+        XCTAssertEqual(editor.content.items, [pending])
+
+        // Revoking catalog permission blocks new selections without discarding the line.
         allowed = false
-        XCTAssertFalse(editor.selectCatalogItem(selected, for: row.id))
-        XCTAssertEqual(editor.content.items[0].name, "Custom merchandise")
-        allowed = true
-        editor.removeItem(id: row.id)
-        XCTAssertFalse(editor.selectCatalogItem(selected, for: row.id))
-        XCTAssertTrue(editor.content.items.isEmpty)
+        XCTAssertNil(editor.applyingCatalogItem(selected, to: pending))
+        XCTAssertEqual(editor.content.items, [pending])
     }
 
     func testCatalogIsDurableScopedAndSearchMatchesDescriptionsNewestFirst() async throws {

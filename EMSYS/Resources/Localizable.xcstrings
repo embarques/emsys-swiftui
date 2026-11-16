@@ -1417,6 +1417,22 @@
         }
       }
     },
+    "drafts.finishItem" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Done"
+          }
+        },
+        "es-DO" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Listo"
+          }
+        }
+      }
+    },
     "drafts.itemOptions" : {
       "extractionState" : "manual",
       "localizations" : {
