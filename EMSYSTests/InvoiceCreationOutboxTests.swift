@@ -156,19 +156,24 @@ final class InvoiceCreationOutboxTests: XCTestCase {
         defer { window.isHidden = true; previous?.makeKey() }
 
         XCTAssertTrue(model.canReplaceInvoiceNumber)
-        try await captureReplacementConfirmation(window, name: "duplicate")
+        // Capture the warning and error row at the top of the confirmation.
+        try await captureReplacementConfirmation(window, name: "duplicate", scrollToBottom: false)
         await model.replaceDuplicateInvoiceNumber()
         XCTAssertFalse(model.canReplaceInvoiceNumber)
         try await captureReplacementConfirmation(window, name: "replacement")
     }
 
-    private func captureReplacementConfirmation(_ window: UIWindow, name: String) async throws {
+    /// Renders the confirmation at its starting position or at the recovery footer.
+    private func captureReplacementConfirmation(_ window: UIWindow, name: String, scrollToBottom: Bool = true) async throws {
         try await Task.sleep(for: .milliseconds(400))
         window.layoutIfNeeded()
-        let scroll = try XCTUnwrap(confirmationScrollView(in: window))
-        scroll.setContentOffset(CGPoint(x: 0, y: max(0, scroll.contentSize.height - scroll.bounds.height
-            + scroll.adjustedContentInset.bottom)), animated: false)
-        try await Task.sleep(for: .milliseconds(200))
+        // Move to the footer only when the test is checking the replacement action.
+        if scrollToBottom {
+            let scroll = try XCTUnwrap(confirmationScrollView(in: window))
+            scroll.setContentOffset(CGPoint(x: 0, y: max(0, scroll.contentSize.height - scroll.bounds.height
+                + scroll.adjustedContentInset.bottom)), animated: false)
+            try await Task.sleep(for: .milliseconds(200))
+        }
         let image = UIGraphicsImageRenderer(bounds: window.bounds).image { _ in
             window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
         }
@@ -386,11 +391,21 @@ final class InvoiceCreationOutboxTests: XCTestCase {
         XCTAssertEqual(editor.creation?.failure?.stage, .payment)
         CreationProtocol.responses = [.success(receiptResponse), .success(invoiceResponse)]
         await editor.retryCreation()
+
+        // The warning remains available even if the device restarts before the retry runs.
+        let reopened = try await open(directory)
+        let pending = try await reopened.invoiceCreation(draftID: operation.draftID)
+        XCTAssertEqual(pending?.state, .pending)
+        XCTAssertEqual(pending?.failure?.message, "Invoice already exists")
+        XCTAssertEqual(pending?.failure?.code, "INVOICE_ALREADY_EXISTS")
+
+        // Successful confirmation clears the saved error and keeps the same number.
         try await uploader.synchronize()
         XCTAssertEqual(CreationProtocol.bodies[0], CreationProtocol.bodies[1])
         let saved = try await store.invoiceCreation(draftID: operation.draftID)
         XCTAssertEqual(saved?.plan.reservation, operation.plan.reservation)
         XCTAssertEqual(saved?.state, .completed)
+        XCTAssertNil(saved?.failure)
     }
 
     /// Opens today's closeout from Payment without queuing or changing the invoice draft.

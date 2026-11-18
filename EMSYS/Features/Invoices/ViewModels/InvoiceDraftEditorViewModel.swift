@@ -478,7 +478,7 @@ final class InvoiceDraftEditorViewModel: Identifiable {
         }
 
         do {
-            try await store.setInvoiceCreationState(id: creation.id, state: .pending)
+            try await store.requeueInvoiceCreation(id: creation.id)
             let updated = try await store.invoiceCreation(draftID: draftID)
             guard isAvailable else {
                 return

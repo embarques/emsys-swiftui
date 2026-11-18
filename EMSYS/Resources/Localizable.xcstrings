@@ -2946,13 +2946,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Your request is saved on this device and will be sent to EMSYS when syncing. If review is needed, check the error message. Retrying preserves the same request."
+            "value" : "Your request is saved on this device."
           }
         },
         "es-DO" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tu solicitud está guardada en este dispositivo y se enviará a EMSYS al sincronizar. Si requiere revisión, consulta el mensaje de error. Reintentar conserva la misma solicitud."
+            "value" : "Tu solicitud está guardada en este dispositivo."
           }
         }
       }
@@ -3479,6 +3479,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Subtotal"
+          }
+        }
+      }
+    },
+    "invoiceCreation.syncError.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synchronization error"
+          }
+        },
+        "es-DO" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Error de sincronización"
+          }
+        }
+      }
+    },
+    "invoiceCreation.syncError.details" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "View error details"
+          }
+        },
+        "es-DO" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ver detalle del error"
+          }
+        }
+      }
+    },
+    "invoiceCreation.syncError.apiMessage" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "API message"
+          }
+        },
+        "es-DO" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mensaje de la API"
           }
         }
       }
