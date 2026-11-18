@@ -286,6 +286,15 @@ extension InvoiceStore {
         try readInvoiceDatabase { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM invoiceCreations WHERE state != 'completed' \(assignedOnly ? "AND assignedOnly = 1" : "")") ?? 0 }
     }
 
+    /// Requeues the original operation and keeps its last failure visible until a new result arrives.
+    func requeueInvoiceCreation(id: UUID) throws {
+        // Change only the queue state so an overlapping upload cannot lose its latest failure.
+        try writeInvoiceDatabase { database in
+            try database.execute(sql: "UPDATE invoiceCreations SET state = 'pending' WHERE id = ? AND state != 'completed'",
+                                 arguments: [id.uuidString])
+        }
+    }
+
     /// Updates recovery state without replacing frozen invoice or payment requests.
     func setInvoiceCreationState(id: UUID, state: PendingInvoiceCreation.State,
                                  failure: PendingInvoiceCreation.Failure? = nil) throws {
@@ -353,7 +362,8 @@ extension InvoiceStore {
                 try database.execute(sql: "UPDATE invoiceAttachments SET invoiceID = ?, state = ? WHERE id = ? AND draftID = ? AND state = 'waiting'",
                     arguments: [invoice.id, invoice.hasDocumentContainer ? "pending" : "awaitingContainer", attachment.id.uuidString, operation.draftID.uuidString])
             }
-            try database.execute(sql: "UPDATE invoiceCreations SET state = 'completed', invoiceID = ? WHERE id = ?",
+            // Clear the previous failure in the same transaction that confirms the invoice.
+            try database.execute(sql: "UPDATE invoiceCreations SET state = 'completed', invoiceID = ?, failure = NULL WHERE id = ?",
                                  arguments: [invoice.id, id.uuidString])
         }
     }

@@ -3,6 +3,7 @@ import SwiftUI
 /// Presents the result and recovery actions for an invoice already saved on this device.
 struct InvoiceCreationConfirmationView: View {
     @Environment(SynchronizationState.self) private var synchronization
+    @State private var showsSyncError = false
     let model: InvoiceDraftEditorViewModel
     let operation: PendingInvoiceCreation
     let canOpenCloseout: Bool
@@ -13,6 +14,18 @@ struct InvoiceCreationConfirmationView: View {
             creationStatus
         }
         .background(confirmationBackground.ignoresSafeArea())
+        .sheet(isPresented: $showsSyncError) {
+            // Present the saved API response for the currently displayed invoice.
+            if let failure = syncFailure {
+                syncErrorDetails(failure)
+            }
+        }
+        .onChange(of: syncFailure != nil) { _, hasFailure in
+            // Close details when successful synchronization clears the failure.
+            if !hasFailure {
+                showsSyncError = false
+            }
+        }
     }
 
     /// Uses the native grouped background on each platform.
@@ -42,6 +55,15 @@ struct InvoiceCreationConfirmationView: View {
             .overlay { RoundedRectangle(cornerRadius: 20).strokeBorder(.quaternary) }
     }
 
+    /// Exposes the saved failure only while the invoice awaits confirmation.
+    private var syncFailure: PendingInvoiceCreation.Failure? {
+        // Older builds could leave a failure on a completed invoice.
+        guard operation.state != .completed else {
+            return nil
+        }
+        return operation.failure
+    }
+
     /// Shows the invoice status, number, and amounts from the saved operation.
     private func confirmationSummary(_ operation: PendingInvoiceCreation) -> some View {
         let completed = operation.state == .completed
@@ -52,6 +74,9 @@ struct InvoiceCreationConfirmationView: View {
         if completed {
             tint = .green
             statusIcon = "checkmark"
+        } else if syncFailure != nil {
+            tint = .orange
+            statusIcon = "exclamationmark.triangle"
         } else if pending {
             tint = AppStyle.Colors.accent
             statusIcon = "clock.arrow.circlepath"
@@ -68,6 +93,10 @@ struct InvoiceCreationConfirmationView: View {
                     Text(completed ? "invoiceCreation.confirmedHint" : "invoiceCreation.pendingHint")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
+                }
+                // Give the complete row a touch target while an error is available.
+                if syncFailure != nil {
+                    syncErrorRow
                 }
                 Divider().padding(.vertical, 4)
                 VStack(alignment: .leading, spacing: 8) {
@@ -152,10 +181,6 @@ struct InvoiceCreationConfirmationView: View {
     /// Presents the saved invoice, payment acknowledgement, and recovery actions.
     private var creationStatus: some View {
         VStack(spacing: 20) {
-            // Put the saved server reason and recovery action before the invoice summary.
-            if let failure = operation.failure {
-                failurePanel(failure)
-            }
             confirmationSummary(operation)
             // Show money as recorded only when the server supplied a payment receipt.
             if let receipt = operation.paymentReceipt {
@@ -228,35 +253,83 @@ struct InvoiceCreationConfirmationView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    /// Shows the failed stage and server reason with the available recovery action.
-    private func failurePanel(_ failure: PendingInvoiceCreation.Failure) -> some View {
-        let message = LocalizedStringKey(failure.stage.title)
-        var panel = MessagePanel(message: message, icon: "exclamationmark.triangle",
-                                 detail: failureDetail(failure))
-        // The saved operation determines whether changing its reservation is safe.
-        if operation.canReplaceInvoiceNumber {
-            panel.actionTitle = "invoiceCreation.replaceNumber"
-            panel.action = {
-                Task {
-                    await model.replaceDuplicateInvoiceNumber()
+    /// Opens the stored synchronization error from the invoice summary.
+    private var syncErrorRow: some View {
+        Button {
+            showsSyncError = true
+        } label: {
+            HStack(spacing: AppStyle.Spacing.small) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("invoiceCreation.syncError.title").font(.headline)
+                    Text("invoiceCreation.syncError.details").font(.subheadline).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: AppStyle.Spacing.small)
+                Image(systemName: "chevron.right")
+                    .font(.subheadline.weight(.semibold))
+                    .accessibilityHidden(true)
+            }
+            .foregroundStyle(.primary)
+            .multilineTextAlignment(.leading)
+            .frame(minHeight: 44)
+            .padding(.horizontal, AppStyle.Spacing.small)
+            .padding(.vertical, 6)
+            .background(.orange.opacity(0.12), in: .rect(cornerRadius: 12))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// Shows the exact API message and any recovery action for the saved failure.
+    private func syncErrorDetails(_ failure: PendingInvoiceCreation.Failure) -> some View {
+        NavigationStack {
+            ScrollView {
+                confirmationCard {
+                    VStack(alignment: .leading, spacing: AppStyle.Spacing.small) {
+                        Label(LocalizedStringKey(failure.stage.title), systemImage: "exclamationmark.triangle")
+                            .font(.headline)
+                        if let number = model.createdInvoiceNumber {
+                            LabeledContent("invoiceCreation.number", value: number)
+                        }
+                        Divider()
+                        // Keep the actual response visible alongside any localized closeout guidance.
+                        if let message = failure.message, !message.isEmpty {
+                            Text("invoiceCreation.syncError.apiMessage").font(.subheadline.bold())
+                            Text(verbatim: message).textSelection(.enabled)
+                        } else if let status = failure.status {
+                            Text("HTTP \(status.formatted(.number.grouping(.never)))")
+                        } else {
+                            Text("invoiceCreation.failure.receipt")
+                        }
+                        if failure.requiresCloseout {
+                            Text(canOpenCloseout ? "invoiceCreation.closeout.required" : "invoiceCreation.closeout.ask")
+                                .foregroundStyle(.secondary)
+                        }
+                        // Keep the existing duplicate-number recovery on the error screen.
+                        if operation.canReplaceInvoiceNumber {
+                            Button("invoiceCreation.replaceNumber") {
+                                Task {
+                                    await model.replaceDuplicateInvoiceNumber()
+                                }
+                            }
+                            .disabled(!model.canReplaceInvoiceNumber || synchronization.isRunning)
+                        }
+                    }
+                }
+                .padding(AppStyle.Spacing.medium)
+            }
+            .background(confirmationBackground)
+            .navigationTitle("invoiceCreation.syncError.title")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("documents.close") { showsSyncError = false }
                 }
             }
         }
-        return panel.disabled(synchronization.isRunning)
-    }
-
-    /// Selects the most specific explanation available for the failure.
-    private func failureDetail(_ failure: PendingInvoiceCreation.Failure) -> Text {
-        // A closeout rejection has a localized recovery instruction.
-        if failure.requiresCloseout {
-            return Text(canOpenCloseout ? "invoiceCreation.closeout.required" : "invoiceCreation.closeout.ask")
-        }
-        if let reason = failure.message, !reason.isEmpty {
-            return Text(verbatim: reason)
-        }
-        if let status = failure.status {
-            return Text("HTTP \(status.formatted(.number.grouping(.never)))")
-        }
-        return Text("invoiceCreation.failure.receipt")
+        #if os(macOS)
+        .frame(minWidth: 440, minHeight: 340)
+        #endif
     }
 }

@@ -548,6 +548,7 @@ struct InvoiceDraftEditorView: View {
                         if operation.failure?.requiresCloseout == true, closeoutBranch != nil {
                             Button("invoiceCreation.closeout.open") { showsCloseoutSetup = true }
                                 .buttonStyle(.bordered)
+                                .disabled(model.isSaving || synchronization.isRunning)
                         }
                         if operation.state != .completed {
                             Button {
