@@ -6,7 +6,8 @@ struct InvoiceItemDescriptionPicker: View {
     @Environment(NetworkConnection.self) private var connection
     @State private var text: String
     @State private var selectedItem: InvoiceCatalogItem?
-    @State private var query = ""
+    @State private var selection: TextSelection?
+    @FocusState private var isDescriptionFocused: Bool
 
     private let model: InvoiceDraftEditorViewModel
     private let onConfirm: (String) -> Void
@@ -39,12 +40,13 @@ struct InvoiceItemDescriptionPicker: View {
         return hasDescription && selectedItem.isValid && model.canChooseCatalogItems
     }
 
-    /// Presents manual entry above the searchable catalog and keeps edits pending until confirmed.
+    /// Uses one editable description to filter catalog suggestions and confirm manual or extended text.
     var body: some View {
         NavigationStack {
             List {
                 Section {
-                    TextField("itemCatalog.enterDescription", text: editableDescription, axis: .vertical)
+                    TextField("itemCatalog.enterDescription", text: editableDescription, selection: $selection, axis: .vertical)
+                        .focused($isDescriptionFocused)
                 }
                 // The picker remains usable for manual entry when the catalog is unavailable.
                 if model.canChooseCatalogItems {
@@ -78,7 +80,6 @@ struct InvoiceItemDescriptionPicker: View {
     /// Lists catalog descriptions and marks the pending selection.
     private var catalogSection: some View {
         Section("itemCatalog.title") {
-            TextField("itemCatalog.search", text: $query)
             // Keep cached descriptions actionable when refresh fails.
             if model.isLoadingCatalog {
                 ProgressView()
@@ -92,8 +93,8 @@ struct InvoiceItemDescriptionPicker: View {
                 Text("itemCatalog.offlineHint").font(.caption).foregroundStyle(.secondary)
             }
 
-            // Search narrows the catalog while leaving the pending description intact.
-            let matches = InvoiceCatalogItem.matching(model.catalogItems, query: query)
+            // The entered description is also the search term for catalog suggestions.
+            let matches = InvoiceCatalogItem.matching(model.catalogItems, query: text)
             if matches.isEmpty && !model.isLoadingCatalog {
                 Text("itemCatalog.empty").foregroundStyle(.secondary)
             }
@@ -107,9 +108,11 @@ struct InvoiceItemDescriptionPicker: View {
     private func catalogRow(_ item: InvoiceCatalogItem) -> some View {
         let isSelected = selectedItem?.id == item.id
         return Button {
-            // Keep the text field in sync with the selected row without clearing the selection.
+            // Fill the single field and position the cursor for appending a custom suffix.
             text = item.name
             selectedItem = item
+            selection = TextSelection(insertionPoint: text.endIndex)
+            isDescriptionFocused = true
         } label: {
             HStack(spacing: AppStyle.Spacing.medium) {
                 Image(systemName: "checkmark")

@@ -1296,6 +1296,8 @@ final class InvoiceDraftEditorViewModel: Identifiable {
         defer {
             isSaving = false
         }
+        // A new save attempt must publish its own result, including after an earlier successful save.
+        didSave = false
         let submitted = content
         do {
             let saved = if asCopy {

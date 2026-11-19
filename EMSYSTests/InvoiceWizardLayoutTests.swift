@@ -94,7 +94,7 @@ final class InvoiceWizardLayoutTests: XCTestCase {
         XCTAssertEqual(Set(model.catalogItems.map(\.name)), Set(catalog.map(\.name)))
 
         // Capture a picker with an existing manual description ready to edit.
-        let picker = InvoiceItemDescriptionPicker(model: model, description: "Artículo especial") { _ in
+        let picker = InvoiceItemDescriptionPicker(model: model, description: "Caja") { _ in
             XCTFail("Displaying the picker must not confirm its description")
         }
         let host = UIHostingController(rootView: picker
@@ -111,7 +111,20 @@ final class InvoiceWizardLayoutTests: XCTestCase {
             previous?.makeKey()
         }
         try await Task.sleep(for: .milliseconds(400))
+        // The same field both holds the description and narrows the catalog.
+        let fields = descriptionInputs(in: host.view)
+        XCTAssertEqual(fields.count, 1)
+        XCTAssertEqual(fields.first?.text, "Caja")
         try capture(window, name: "description-picker")
+    }
+
+    /// Finds editable multiline description fields in the native picker.
+    private func descriptionInputs(in view: UIView) -> [UITextView] {
+        // Collect text views without counting the catalog rows or navigation controls.
+        if let field = view as? UITextView {
+            return [field]
+        }
+        return view.subviews.flatMap { descriptionInputs(in: $0) }
     }
 
     private func focusedTextInput(in view: UIView) -> (any UITextInput)? {
@@ -119,6 +132,7 @@ final class InvoiceWizardLayoutTests: XCTestCase {
         return view.subviews.lazy.compactMap { self.focusedTextInput(in: $0) }.first
     }
 
+    /// Renders the invoice wizard, saved-draft feedback, and adaptive item fields.
     func testNativeCustomerAndItemFieldsRenderWithSelectedAddressesAndAccessibleLabels() async throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -155,6 +169,12 @@ final class InvoiceWizardLayoutTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(600))
         XCTAssertEqual(model.nextInvoiceNumber, reserved.number)
         try capture(window, name: "reserved-number")
+        // Saving keeps the editor visible and confirms that the local draft committed.
+        await model.save()
+        XCTAssertTrue(model.didSave)
+        XCTAssertFalse(model.hasChanges)
+        try await Task.sleep(for: .milliseconds(250))
+        try capture(window, name: "draft-saved")
         model.continueCreation()
         XCTAssertEqual(model.step, .customers)
         try await Task.sleep(for: .milliseconds(500))
