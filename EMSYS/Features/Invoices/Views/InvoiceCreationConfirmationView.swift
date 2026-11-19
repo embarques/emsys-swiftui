@@ -96,7 +96,7 @@ struct InvoiceCreationConfirmationView: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
-                // Give the complete row a touch target while an error is available.
+                // Present the saved error once, in the summary's amber disclosure row.
                 if syncFailure != nil {
                     syncErrorRow
                 }
@@ -190,11 +190,7 @@ struct InvoiceCreationConfirmationView: View {
                 MessagePanel(message: "invoiceCreation.syncOffline", icon: "wifi.slash")
             } else if isWaitingForSync || synchronization.isRunning {
                 MessagePanel(message: "sync.running", icon: "arrow.trianglehead.clockwise.rotate.90")
-            } else if let failure = syncFailure {
-                MessagePanel(message: LocalizedStringKey(failure.stage.title),
-                    icon: "exclamationmark.triangle", actionTitle: "invoiceCreation.syncError.details",
-                    action: { showsSyncError = true }, detail: failure.message.map { Text(verbatim: $0) })
-            } else if synchronization.failed {
+            } else if syncFailure == nil, synchronization.failed {
                 MessagePanel(message: "sync.failed", icon: "exclamationmark.triangle")
             }
             confirmationSummary(operation)
@@ -269,7 +265,7 @@ struct InvoiceCreationConfirmationView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    /// Opens the stored synchronization error from the invoice summary.
+    /// Opens the saved API failure from the summary's single error disclosure.
     private var syncErrorRow: some View {
         Button {
             showsSyncError = true
