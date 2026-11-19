@@ -5,6 +5,7 @@ struct InvoiceListView: View {
     @Environment(AppPreferences.self) private var preferences
     @Environment(SynchronizationState.self) private var synchronization
     @Environment(NetworkConnection.self) private var connection
+    @Environment(\.scenePhase) private var scenePhase
     @State private var loader = InvoiceListLoader()
     private var model: InvoiceListViewModel? { loader.model }
     @State private var query = InvoiceListQuery()
@@ -131,7 +132,7 @@ struct InvoiceListView: View {
                     printInvoice: session.canPrintInvoices ? { printInvoice($0, model: model) } : nil,
                     more: { await model.loadMore(online: online) },
                     retry: { await model.retry(online: online) },
-                    refresh: { await model.request(query: query, online: online).value },
+                    refresh: { await synchronizeDirectory() },
                     poolWarning: poolWarning(for: model))
                 .task { await model.refreshInvoicePoolSummary() }
                 .toolbar {
@@ -139,8 +140,9 @@ struct InvoiceListView: View {
                         createButton(model)
                         if !usesSidebarRows {
                             Button {
-                                model.request(query: query, online: online)
-                            } label: { Label("invoices.refresh", systemImage: "arrow.clockwise") }
+                                Task { await synchronizeDirectory() }
+                            } label: { Label("sync.now", systemImage: "arrow.clockwise") }
+                            .disabled(synchronization.isRunning)
                         }
                         directoryMenu(model)
                     }
@@ -231,6 +233,18 @@ struct InvoiceListView: View {
         }
     }
 
+    /// Uploads pending work, downloads updates, and refreshes the visible invoice directory.
+    private func synchronizeDirectory() async {
+        // The shared worker serializes retries and publishes progress and the final outcome.
+        await synchronization.run(for: session, includesDownloads: true) {
+            online && session.canViewInvoices && scenePhase == .active
+        }
+        if let model {
+            await model.request(query: query, online: online).value
+            await model.refreshInvoicePoolSummary()
+        }
+    }
+
     @ViewBuilder
     private func createButton(_ model: InvoiceListViewModel) -> some View {
         if session.canCreateInvoices {
@@ -258,8 +272,9 @@ struct InvoiceListView: View {
                     canEdit: { session.contextID == contextID && session.canUpdateInvoices }))
             } label: { Label("invoiceEdits.pendingTitle", systemImage: "tray.and.arrow.up") }
             Button {
-                model.request(query: query, online: online)
-            } label: { Label("invoices.refresh", systemImage: "arrow.clockwise") }
+                Task { await synchronizeDirectory() }
+            } label: { Label("sync.now", systemImage: "arrow.clockwise") }
+            .disabled(synchronization.isRunning)
         } label: {
             if iconOnly {
                 Label("invoiceList.actions", systemImage: "ellipsis.circle").labelStyle(.iconOnly)

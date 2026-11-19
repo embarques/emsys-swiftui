@@ -6128,6 +6128,86 @@
         }
       }
     },
+    "drafts.saving" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saving draft…"
+          }
+        },
+        "es-DO" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guardando borrador…"
+          }
+        }
+      }
+    },
+    "drafts.saved" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Draft saved on this device."
+          }
+        },
+        "es-DO" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Borrador guardado en este dispositivo."
+          }
+        }
+      }
+    },
+    "invoiceCreation.syncSucceeded" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invoice synchronized successfully."
+          }
+        },
+        "es-DO" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Factura sincronizada correctamente."
+          }
+        }
+      }
+    },
+    "invoiceCreation.syncOffline" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invoice saved on this device. Synchronization will resume when connected."
+          }
+        },
+        "es-DO" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Factura guardada en este dispositivo. Se sincronizará cuando tengas conexión."
+          }
+        }
+      }
+    },
+    "sync.succeeded" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synchronization completed successfully."
+          }
+        },
+        "es-DO" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sincronización completada correctamente."
+          }
+        }
+      }
+    },
     "messages.title" : {
       "extractionState" : "manual",
       "localizations" : {

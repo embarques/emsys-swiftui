@@ -28,6 +28,37 @@ final class InvoiceDraftTests: XCTestCase {
         XCTAssertEqual(summaries.first?.itemCount, 1)
     }
 
+    /// Verifies repeated saves report the committed draft and a later conflict cannot retain success.
+    func testRepeatedSaveUpdatesFeedbackAndPreservesAConflictingEdit() async throws {
+        // Keep the editor open after Save so further changes use the committed revision.
+        let directory = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try await InvoiceStore.open(directory: directory, userID: "user", companyID: "company")
+        let editor = InvoiceDraftEditorViewModel(store: store, isAuthorized: { true })
+        editor.content.senderName = "First sender"
+        await editor.save()
+        XCTAssertTrue(editor.didSave)
+        XCTAssertFalse(editor.hasChanges)
+        editor.content.senderName = "Second sender"
+        await editor.save()
+        XCTAssertTrue(editor.didSave)
+        XCTAssertFalse(editor.hasChanges)
+
+        // A concurrent write causes an error message and preserves the editor's next input.
+        let summaries = try await store.draftSummaries()
+        let summary = try XCTUnwrap(summaries.first)
+        let snapshot = try await store.draft(id: summary.id)
+        let saved = try XCTUnwrap(snapshot)
+        var other = saved.content
+        other.senderName = "Other window"
+        _ = try await store.saveDraft(id: saved.id, content: other, expectedRevision: saved.revision)
+        editor.content.senderName = "Third sender"
+        await editor.save()
+        XCTAssertFalse(editor.didSave)
+        XCTAssertEqual(editor.issue, "drafts.changed")
+        XCTAssertEqual(editor.content.senderName, "Third sender")
+    }
+
     func testAStaleWindowPreservesItsFormAndCanExplicitlySaveAnotherDraft() async throws {
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }

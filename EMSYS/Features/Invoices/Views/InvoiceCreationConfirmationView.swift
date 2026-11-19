@@ -7,6 +7,8 @@ struct InvoiceCreationConfirmationView: View {
     let model: InvoiceDraftEditorViewModel
     let operation: PendingInvoiceCreation
     let canOpenCloseout: Bool
+    var isWaitingForSync = false
+    var isOffline = false
 
     /// Displays the confirmation and its recovery states in a scrollable surface.
     var body: some View {
@@ -181,6 +183,20 @@ struct InvoiceCreationConfirmationView: View {
     /// Presents the saved invoice, payment acknowledgement, and recovery actions.
     private var creationStatus: some View {
         VStack(spacing: 20) {
+            // Give each attempt immediate feedback even before the worker starts.
+            if operation.state == .completed {
+                MessagePanel(message: "invoiceCreation.syncSucceeded", icon: "checkmark.circle")
+            } else if isWaitingForSync && isOffline {
+                MessagePanel(message: "invoiceCreation.syncOffline", icon: "wifi.slash")
+            } else if isWaitingForSync || synchronization.isRunning {
+                MessagePanel(message: "sync.running", icon: "arrow.trianglehead.clockwise.rotate.90")
+            } else if let failure = syncFailure {
+                MessagePanel(message: LocalizedStringKey(failure.stage.title),
+                    icon: "exclamationmark.triangle", actionTitle: "invoiceCreation.syncError.details",
+                    action: { showsSyncError = true }, detail: failure.message.map { Text(verbatim: $0) })
+            } else if synchronization.failed {
+                MessagePanel(message: "sync.failed", icon: "exclamationmark.triangle")
+            }
             confirmationSummary(operation)
             // Show money as recorded only when the server supplied a payment receipt.
             if let receipt = operation.paymentReceipt {

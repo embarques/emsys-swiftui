@@ -11,6 +11,7 @@ struct InvoiceDraftEditorView: View {
     @State private var createdDetail: InvoiceDetailViewModel?
     @State var model: InvoiceDraftEditorViewModel
     @State private var confirmsDiscard = false
+    @State private var isWaitingForSync = false
     @State private var customerSearch: InvoiceCustomerSearchViewModel?
     @State private var showsCloseoutSetup = false
     @State private var showsSignature = false
@@ -50,7 +51,9 @@ struct InvoiceDraftEditorView: View {
                         InvoiceCreationConfirmationView(
                             model: model,
                             operation: operation,
-                            canOpenCloseout: closeoutBranch != nil
+                            canOpenCloseout: closeoutBranch != nil,
+                            isWaitingForSync: isWaitingForSync,
+                            isOffline: connection.status == .unavailable
                         )
                     } else {
                         editorForm
@@ -90,8 +93,13 @@ struct InvoiceDraftEditorView: View {
             .toolbar {
                 if model.creation == nil {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("invoiceEdits.cancel") {
-                            if model.hasChanges { confirmsDiscard = true } else { dismiss() }
+                        Button(model.didSave && !model.hasChanges ? "documents.close" : "invoiceEdits.cancel") {
+                            // Saved drafts can close immediately. Unsaved input requires a discard decision.
+                            if model.hasChanges {
+                                confirmsDiscard = true
+                            } else {
+                                dismiss()
+                            }
                         }
                         .disabled(model.isSaving)
                     }
@@ -149,6 +157,7 @@ struct InvoiceDraftEditorView: View {
             .sheet(isPresented: $showsSignature) { InvoiceSenderSignatureView(model: model) }
             .onChange(of: model.didQueueCreation) {
                 if model.didQueueCreation {
+                    isWaitingForSync = true
                     model.acknowledgeUploadRequest()
                     synchronization.requestUpload()
                 }
@@ -161,7 +170,10 @@ struct InvoiceDraftEditorView: View {
             }
             .modifier(InvoicePreviewModifier(preview: preview))
             .onChange(of: session?.contextID) { preview.cancel() }
-            .onChange(of: model.didSave) { if model.didSave { dismiss() } }
+            .onChange(of: synchronization.lastFinishedAt) {
+                // Each completed attempt replaces the progress message with the saved result.
+                isWaitingForSync = false
+            }
         }
         .interactiveDismissDisabled(model.hasChanges || model.isSaving)
         #if os(macOS)
@@ -171,51 +183,68 @@ struct InvoiceDraftEditorView: View {
 
     /// Presents the fields and available actions for the current wizard step.
     private var editorForm: some View {
-        Form {
-            if !usesMobileEntryLayout { wizardStepHeader }
-            else if let pickup = model.content.pickup {
-                LabeledContent("pickups.invoiceAssociation", value: "#\(pickup.id)").font(.footnote)
-            }
-            if model.isLoading || model.isSaving { ProgressView() }
-            if let issue = model.issue {
-                Text(LocalizedStringKey(issue)).foregroundStyle(.red)
-                if model.hasConflict {
-                    Button("drafts.saveCopy") { Task { await model.save(asCopy: true) } }
-                        .disabled(!model.canSave)
+        ScrollViewReader { proxy in
+            Form {
+                if !usesMobileEntryLayout { wizardStepHeader }
+                else if let pickup = model.content.pickup {
+                    LabeledContent("pickups.invoiceAssociation", value: "#\(pickup.id)").font(.footnote)
                 }
-            }
-            if let issue = model.stepIssue {
-                Label(LocalizedStringKey(issue), systemImage: "exclamationmark.circle")
-                    .foregroundStyle(.red)
-            }
-            switch model.step {
-            case .details: invoiceDetails
-            case .customers: customerDetails
-            case .items: invoiceItems
-            case .payment:
-                if !usesMobileEntryLayout { paymentSummary }
-                // Let authorized operators open the closeout before entering a payment.
-                if closeoutBranch != nil, model.canOpenPaymentCloseout {
-                    Section {
-                        Button("invoiceCreation.closeout.open", systemImage: "calendar.badge.plus") {
-                            showsCloseoutSetup = true
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(connection.status == .unavailable || model.isCheckingPaymentCloseout)
+                // Report draft persistence where the operator pressed Save.
+                Section {
+                    if model.isSaving {
+                        MessagePanel(message: "drafts.saving", icon: "clock")
+                    } else if model.didSave && !model.hasChanges {
+                        MessagePanel(message: "drafts.saved", icon: "checkmark.circle")
                     }
                 }
-                InvoicePaymentFields(model: model, usesMobileLayout: usesMobileEntryLayout)
-                paymentContext
-            case .review: reviewSummary; attachmentSection; policyReview; signatureReview
+                .id("draft-save-feedback")
+                if model.isLoading { ProgressView() }
+                if let issue = model.issue {
+                    MessagePanel(message: LocalizedStringKey(issue), icon: "exclamationmark.triangle")
+                    if model.hasConflict {
+                        Button("drafts.saveCopy") { Task { await model.save(asCopy: true) } }
+                            .disabled(!model.canSave)
+                    }
+                }
+                if let issue = model.stepIssue {
+                    Label(LocalizedStringKey(issue), systemImage: "exclamationmark.circle")
+                        .foregroundStyle(.red)
+                }
+                switch model.step {
+                case .details: invoiceDetails
+                case .customers: customerDetails
+                case .items: invoiceItems
+                case .payment:
+                    if !usesMobileEntryLayout { paymentSummary }
+                    // Let authorized operators open the closeout before entering a payment.
+                    if closeoutBranch != nil, model.canOpenPaymentCloseout {
+                        Section {
+                            Button("invoiceCreation.closeout.open", systemImage: "calendar.badge.plus") {
+                                showsCloseoutSetup = true
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(connection.status == .unavailable || model.isCheckingPaymentCloseout)
+                        }
+                    }
+                    InvoicePaymentFields(model: model, usesMobileLayout: usesMobileEntryLayout)
+                    paymentContext
+                case .review: reviewSummary; attachmentSection; policyReview; signatureReview
+                }
+                if !model.isLoaded && !model.isLoading {
+                    Button("auth.retry") { Task { await model.load() } }
+                }
             }
-            if !model.isLoaded && !model.isLoading {
-                Button("auth.retry") { Task { await model.load() } }
+            .formStyle(.grouped)
+            .frame(maxWidth: 840)
+            .frame(maxWidth: .infinity)
+            .disabled(!model.isLoaded || model.isSaving)
+            .onChange(of: model.isSaving) { _, saving in
+                // Bring the result into view when the save attempt finishes.
+                if !saving {
+                    proxy.scrollTo("draft-save-feedback", anchor: .top)
+                }
             }
         }
-        .formStyle(.grouped)
-        .frame(maxWidth: 840)
-        .frame(maxWidth: .infinity)
-        .disabled(!model.isLoaded || model.isSaving)
     }
 
     private var wizardStepHeader: some View {
@@ -558,7 +587,7 @@ struct InvoiceDraftEditorView: View {
                                     .frame(maxWidth: .infinity, minHeight: 44)
                             }
                             .buttonStyle(.bordered)
-                            .disabled(model.isSaving || synchronization.isRunning)
+                            .disabled(model.isSaving || synchronization.isRunning || isWaitingForSync && connection.status != .unavailable)
                         }
                         Button("documents.close") { dismiss() }
                             .frame(maxWidth: .infinity, minHeight: 44)
